@@ -1,0 +1,26 @@
+{
+  "name": "spittle-cursor-context",
+  "displayName": "Spittle Cursor Context",
+  "description": "Reports workspace info to Spittle for @file expansion",
+  "version": "0.1.0",
+  "publisher": "spittle",
+  "engines": {
+    "vscode": "^1.80.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {},
+  "scripts": {
+    "build": "tsc -p ./",
+    "watch": "tsc -watch -p ./"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.80.0",
+    "typescript": "^5.0.0"
+  }
+}

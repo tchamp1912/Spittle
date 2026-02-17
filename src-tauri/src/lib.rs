@@ -1,15 +1,24 @@
 mod actions;
 #[cfg(all(target_os = "macos", target_arch = "aarch64"))]
 mod apple_intelligence;
+mod application;
+mod at_file_expansion;
 mod audio_feedback;
 pub mod audio_toolkit;
 mod clipboard;
 mod commands;
+mod context_providers;
+mod domain;
 mod helpers;
 mod input;
+pub mod jargon;
 mod llm_client;
+#[cfg(target_os = "macos")]
+mod macos_ax;
 mod managers;
 mod overlay;
+mod pipeline;
+pub mod rolling_harness;
 mod settings;
 mod shortcut;
 mod signal_handle;
@@ -19,10 +28,8 @@ mod utils;
 use specta_typescript::{BigIntExportBehavior, Typescript};
 use tauri_specta::{collect_commands, Builder};
 
+use application::services::AppServices;
 use env_filter::Builder as EnvFilterBuilder;
-use managers::audio::AudioRecordingManager;
-use managers::history::HistoryManager;
-use managers::model::ModelManager;
 use managers::transcription::TranscriptionManager;
 #[cfg(unix)]
 use signal_hook::consts::SIGUSR2;
@@ -108,30 +115,14 @@ fn show_main_window(app: &AppHandle) {
     }
 }
 
-fn initialize_core_logic(app_handle: &AppHandle) {
+fn initialize_core_logic(app_handle: &AppHandle) -> anyhow::Result<()> {
     // Note: Enigo (keyboard/mouse simulation) is NOT initialized here.
     // The frontend is responsible for calling the `initialize_enigo` command
     // after onboarding completes. This avoids triggering permission dialogs
     // on macOS before the user is ready.
 
-    // Initialize the managers
-    let recording_manager = Arc::new(
-        AudioRecordingManager::new(app_handle).expect("Failed to initialize recording manager"),
-    );
-    let model_manager =
-        Arc::new(ModelManager::new(app_handle).expect("Failed to initialize model manager"));
-    let transcription_manager = Arc::new(
-        TranscriptionManager::new(app_handle, model_manager.clone())
-            .expect("Failed to initialize transcription manager"),
-    );
-    let history_manager =
-        Arc::new(HistoryManager::new(app_handle).expect("Failed to initialize history manager"));
-
-    // Add managers to Tauri's managed state
-    app_handle.manage(recording_manager.clone());
-    app_handle.manage(model_manager.clone());
-    app_handle.manage(transcription_manager.clone());
-    app_handle.manage(history_manager.clone());
+    // Initialize core services and register managers in Tauri state.
+    AppServices::initialize(app_handle)?.register(app_handle);
 
     // Note: Shortcuts are NOT initialized here.
     // The frontend is responsible for calling the `initialize_shortcuts` command
@@ -139,10 +130,11 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     // This matches the pattern used for Enigo initialization.
 
     #[cfg(unix)]
-    let signals = Signals::new(&[SIGUSR2]).unwrap();
-    // Set up SIGUSR2 signal handler for toggling transcription
-    #[cfg(unix)]
-    signal_handle::setup_signal_handler(app_handle.clone(), signals);
+    {
+        let signals = Signals::new(&[SIGUSR2])?;
+        // Set up SIGUSR2 signal handler for toggling transcription.
+        signal_handle::setup_signal_handler(app_handle.clone(), signals);
+    }
 
     // Apply macOS Accessory policy if starting hidden
     #[cfg(target_os = "macos")]
@@ -158,16 +150,15 @@ fn initialize_core_logic(app_handle: &AppHandle) {
     // Choose the appropriate initial icon based on theme
     let initial_icon_path = tray::get_icon_path(initial_theme, tray::TrayIconState::Idle);
 
+    let icon_path = app_handle
+        .path()
+        .resolve(initial_icon_path, tauri::path::BaseDirectory::Resource)
+        .map_err(|e| anyhow::anyhow!("failed to resolve tray icon path: {e}"))?;
+    let tray_icon = Image::from_path(icon_path)
+        .map_err(|e| anyhow::anyhow!("failed to load tray icon image: {e}"))?;
+
     let tray = TrayIconBuilder::new()
-        .icon(
-            Image::from_path(
-                app_handle
-                    .path()
-                    .resolve(initial_icon_path, tauri::path::BaseDirectory::Resource)
-                    .unwrap(),
-            )
-            .unwrap(),
-        )
+        .icon(tray_icon)
         .show_menu_on_left_click(true)
         .icon_as_template(true)
         .on_menu_event(|app, event| match event.id.as_ref() {
@@ -207,7 +198,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
             _ => {}
         })
         .build(app_handle)
-        .unwrap();
+        .map_err(|e| anyhow::anyhow!("failed to build tray: {e}"))?;
     app_handle.manage(tray);
 
     // Initialize tray menu with idle state
@@ -239,6 +230,7 @@ fn initialize_core_logic(app_handle: &AppHandle) {
 
     // Create the recording overlay window (hidden by default)
     utils::create_recording_overlay(app_handle);
+    Ok(())
 }
 
 #[tauri::command]
@@ -280,6 +272,7 @@ pub fn run() {
         shortcut::change_auto_submit_setting,
         shortcut::change_auto_submit_key_setting,
         shortcut::change_post_process_enabled_setting,
+        shortcut::change_post_process_auto_prompt_selection_setting,
         shortcut::change_experimental_enabled_setting,
         shortcut::change_post_process_base_url_setting,
         shortcut::change_post_process_api_key_setting,
@@ -294,7 +287,23 @@ pub fn run() {
         shortcut::suspend_binding,
         shortcut::resume_binding,
         shortcut::change_mute_while_recording_setting,
+        shortcut::change_audio_segment_size_seconds_setting,
         shortcut::change_append_trailing_space_setting,
+        shortcut::change_at_file_expansion_setting,
+        shortcut::update_jargon_profiles,
+        shortcut::update_jargon_custom_terms,
+        shortcut::update_jargon_custom_corrections,
+        shortcut::get_jargon_builtin_profiles,
+        shortcut::update_domain_selector_enabled_setting,
+        shortcut::update_domain_selector_timeout_ms_setting,
+        shortcut::update_domain_selector_top_k_setting,
+        shortcut::update_domain_selector_min_score_setting,
+        shortcut::update_domain_selector_hysteresis_setting,
+        shortcut::update_domain_selector_blend_manual_profiles_setting,
+        shortcut::get_jargon_packs,
+        shortcut::update_jargon_packs,
+        shortcut::import_jargon_packs_json,
+        shortcut::export_jargon_packs_json,
         shortcut::change_app_language_setting,
         shortcut::change_update_checks_setting,
         shortcut::change_keyboard_implementation_setting,
@@ -375,7 +384,7 @@ pub fn run() {
                     }),
                     // File logs respect the user's settings (stored in FILE_LOG_LEVEL atomic)
                     Target::new(TargetKind::LogDir {
-                        file_name: Some("handy".into()),
+                        file_name: Some("spittle".into()),
                     })
                     .filter(|metadata| {
                         let file_level = FILE_LOG_LEVEL.load(Ordering::Relaxed);
@@ -416,13 +425,22 @@ pub fn run() {
             FILE_LOG_LEVEL.store(file_log_level.to_level_filter() as u8, Ordering::Relaxed);
             let app_handle = app.handle().clone();
 
-            initialize_core_logic(&app_handle);
+            if let Err(e) = initialize_core_logic(&app_handle) {
+                log::error!("Failed to initialize core application services: {}", e);
+                return Err(Box::new(std::io::Error::other(format!(
+                    "core initialization failed: {e}"
+                ))));
+            }
 
             // Show main window only if not starting hidden
             if !settings.start_hidden {
                 if let Some(main_window) = app_handle.get_webview_window("main") {
-                    main_window.show().unwrap();
-                    main_window.set_focus().unwrap();
+                    if let Err(e) = main_window.show() {
+                        log::error!("Failed to show main window during startup: {}", e);
+                    }
+                    if let Err(e) = main_window.set_focus() {
+                        log::error!("Failed to focus main window during startup: {}", e);
+                    }
                 }
             }
 

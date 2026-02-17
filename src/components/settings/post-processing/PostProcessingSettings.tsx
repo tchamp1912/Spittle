@@ -153,6 +153,8 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
 
   const prompts = getSetting("post_process_prompts") || [];
   const selectedPromptId = getSetting("post_process_selected_prompt_id") || "";
+  const autoPromptSelection =
+    getSetting("post_process_auto_prompt_selection") || false;
   const selectedPrompt =
     prompts.find((prompt) => prompt.id === selectedPromptId) || null;
 
@@ -258,6 +260,23 @@ const PostProcessingSettingsPromptsComponent: React.FC = () => {
       grouped={true}
     >
       <div className="space-y-3">
+        <div className="flex items-center">
+          <Button
+            onClick={() =>
+              updateSetting(
+                "post_process_auto_prompt_selection",
+                !autoPromptSelection,
+              )
+            }
+            variant={autoPromptSelection ? "primary" : "secondary"}
+            size="sm"
+            disabled={isUpdating("post_process_auto_prompt_selection")}
+          >
+            {autoPromptSelection
+              ? t("settings.postProcessing.prompts.autoSelectOn")
+              : t("settings.postProcessing.prompts.autoSelectOff")}
+          </Button>
+        </div>
         <div className="flex gap-2">
           <Dropdown
             selectedValue={selectedPromptId || null}

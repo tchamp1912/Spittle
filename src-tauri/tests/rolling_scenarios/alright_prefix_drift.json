@@ -1,0 +1,9 @@
+{
+  "name": "alright-prefix-drift",
+  "hypotheses": [
+    "All right.",
+    "Alright, let's see if that's doing any better.",
+    "Alright, let's see if that's doing any better. Nope.",
+    "Alright, let's see if that's doing any better. Nope, it's still leaving one to two characters per rewrite."
+  ]
+}

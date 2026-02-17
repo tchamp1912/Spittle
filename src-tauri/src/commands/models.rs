@@ -1,6 +1,7 @@
+use crate::application::model_service::ModelService;
 use crate::managers::model::{ModelInfo, ModelManager};
 use crate::managers::transcription::TranscriptionManager;
-use crate::settings::{get_settings, write_settings};
+use crate::settings::get_settings;
 use std::sync::Arc;
 use tauri::{AppHandle, State};
 
@@ -41,21 +42,8 @@ pub async fn delete_model(
     transcription_manager: State<'_, Arc<TranscriptionManager>>,
     model_id: String,
 ) -> Result<(), String> {
-    // If deleting the active model, unload it and clear the setting
-    let settings = get_settings(&app_handle);
-    if settings.selected_model == model_id {
-        transcription_manager
-            .unload_model()
-            .map_err(|e| format!("Failed to unload model: {}", e))?;
-
-        let mut settings = get_settings(&app_handle);
-        settings.selected_model = String::new();
-        write_settings(&app_handle, settings);
-    }
-
-    model_manager
-        .delete_model(&model_id)
-        .map_err(|e| e.to_string())
+    let service = ModelService::new(&app_handle, &model_manager, &transcription_manager);
+    service.delete_model(&model_id).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -66,26 +54,10 @@ pub async fn set_active_model(
     transcription_manager: State<'_, Arc<TranscriptionManager>>,
     model_id: String,
 ) -> Result<(), String> {
-    // Check if model exists and is available
-    let model_info = model_manager
-        .get_model_info(&model_id)
-        .ok_or_else(|| format!("Model not found: {}", model_id))?;
-
-    if !model_info.is_downloaded {
-        return Err(format!("Model not downloaded: {}", model_id));
-    }
-
-    // Load the model in the transcription manager
-    transcription_manager
-        .load_model(&model_id)
-        .map_err(|e| e.to_string())?;
-
-    // Update settings
-    let mut settings = get_settings(&app_handle);
-    settings.selected_model = model_id.clone();
-    write_settings(&app_handle, settings);
-
-    Ok(())
+    let service = ModelService::new(&app_handle, &model_manager, &transcription_manager);
+    service
+        .set_active_model(&model_id)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -129,7 +101,7 @@ pub async fn has_any_models_or_downloads(
 ) -> Result<bool, String> {
     let models = model_manager.get_available_models();
     // Return true if any models are downloaded OR if any downloads are in progress
-    Ok(models.iter().any(|m| m.is_downloaded))
+    Ok(models.iter().any(|m| m.is_downloaded || m.is_downloading))
 }
 
 #[tauri::command]

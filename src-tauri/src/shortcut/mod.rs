@@ -10,6 +10,7 @@
 //! setting and can be changed at runtime.
 
 mod handler;
+#[path = "spittle-keys.rs"]
 pub mod handy_keys;
 mod tauri_impl;
 
@@ -20,8 +21,8 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_autostart::ManagerExt;
 
 use crate::settings::{
-    self, get_settings, AutoSubmitKey, ClipboardHandling, KeyboardImplementation, LLMPrompt,
-    OverlayPosition, PasteMethod, ShortcutBinding, SoundTheme, TypingTool,
+    self, get_settings, AutoSubmitKey, ClipboardHandling, JargonPack, KeyboardImplementation,
+    LLMPrompt, OverlayPosition, PasteMethod, ShortcutBinding, SoundTheme, TypingTool,
     APPLE_INTELLIGENCE_DEFAULT_MODEL_ID, APPLE_INTELLIGENCE_PROVIDER_ID,
 };
 use crate::tray;
@@ -784,6 +785,18 @@ pub fn change_post_process_enabled_setting(app: AppHandle, enabled: bool) -> Res
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_post_process_auto_prompt_selection_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.post_process_auto_prompt_selection = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_experimental_enabled_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.experimental_enabled = enabled;
@@ -1020,11 +1033,260 @@ pub fn change_mute_while_recording_setting(app: AppHandle, enabled: bool) -> Res
 
 #[tauri::command]
 #[specta::specta]
+pub fn change_audio_segment_size_seconds_setting(
+    app: AppHandle,
+    _seconds: f64,
+) -> Result<(), String> {
+    // Segment-on-silence is disabled; always persist 0.0 for compatibility.
+    let mut settings = settings::get_settings(&app);
+    settings.audio_segment_size_seconds = 0.0;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
 pub fn change_append_trailing_space_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
     let mut settings = settings::get_settings(&app);
     settings.append_trailing_space = enabled;
     settings::write_settings(&app, settings);
     Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn change_at_file_expansion_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.at_file_expansion_enabled = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_jargon_profiles(app: AppHandle, profiles: Vec<String>) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.jargon_enabled_profiles = profiles;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_jargon_custom_terms(app: AppHandle, terms: Vec<String>) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.jargon_custom_terms = terms;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_jargon_custom_corrections(
+    app: AppHandle,
+    corrections: Vec<crate::jargon::JargonCorrection>,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.jargon_custom_corrections = corrections;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_jargon_builtin_profiles(
+) -> std::collections::HashMap<String, crate::jargon::JargonProfile> {
+    crate::jargon::builtin_profiles()
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_domain_selector_enabled_setting(app: AppHandle, enabled: bool) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.domain_selector_enabled = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_domain_selector_timeout_ms_setting(
+    app: AppHandle,
+    timeout_ms: u64,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.domain_selector_timeout_ms = timeout_ms.clamp(25, 2000);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_domain_selector_top_k_setting(app: AppHandle, top_k: usize) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.domain_selector_top_k = top_k.clamp(1, 5);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_domain_selector_min_score_setting(
+    app: AppHandle,
+    min_score: f32,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.domain_selector_min_score = min_score.clamp(0.0, 1.0);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_domain_selector_hysteresis_setting(
+    app: AppHandle,
+    hysteresis: f32,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.domain_selector_hysteresis = hysteresis.clamp(0.0, 1.0);
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_domain_selector_blend_manual_profiles_setting(
+    app: AppHandle,
+    enabled: bool,
+) -> Result<(), String> {
+    let mut settings = settings::get_settings(&app);
+    settings.domain_selector_blend_manual_profiles = enabled;
+    settings::write_settings(&app, settings);
+    Ok(())
+}
+
+fn sanitize_pack(pack: &JargonPack) -> Option<JargonPack> {
+    let id = pack.id.trim();
+    let label = pack.label.trim();
+    if id.is_empty() || label.is_empty() {
+        return None;
+    }
+
+    let terms = pack
+        .terms
+        .iter()
+        .map(|term| term.trim().to_string())
+        .filter(|term| !term.is_empty())
+        .collect::<Vec<_>>();
+    let corrections = pack
+        .corrections
+        .iter()
+        .filter(|item| !item.from.trim().is_empty() && !item.to.trim().is_empty())
+        .cloned()
+        .collect::<Vec<_>>();
+
+    Some(JargonPack {
+        id: id.to_string(),
+        label: label.to_string(),
+        terms,
+        corrections,
+    })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn get_jargon_packs(app: AppHandle) -> Vec<JargonPack> {
+    let settings = settings::get_settings(&app);
+    settings.jargon_packs
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn update_jargon_packs(
+    app: AppHandle,
+    packs: Vec<JargonPack>,
+) -> Result<Vec<JargonPack>, String> {
+    let mut dedup = std::collections::HashMap::<String, JargonPack>::new();
+    for pack in packs {
+        if let Some(sanitized) = sanitize_pack(&pack) {
+            dedup.insert(sanitized.id.clone(), sanitized);
+        }
+    }
+    let mut merged = dedup.into_values().collect::<Vec<_>>();
+    merged.sort_by(|a, b| a.id.cmp(&b.id));
+
+    let mut settings = settings::get_settings(&app);
+    settings.jargon_packs = merged.clone();
+    settings::write_settings(&app, settings);
+    Ok(merged)
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Type)]
+struct JargonPackImportPayload {
+    #[serde(default)]
+    version: u32,
+    packs: Vec<JargonPack>,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn import_jargon_packs_json(
+    app: AppHandle,
+    json: String,
+    replace_existing: bool,
+) -> Result<Vec<JargonPack>, String> {
+    let payload: JargonPackImportPayload =
+        serde_json::from_str(&json).map_err(|e| format!("Invalid jargon pack JSON: {}", e))?;
+
+    let mut settings = settings::get_settings(&app);
+    let mut map = if replace_existing {
+        std::collections::HashMap::<String, JargonPack>::new()
+    } else {
+        settings
+            .jargon_packs
+            .iter()
+            .cloned()
+            .map(|pack| (pack.id.clone(), pack))
+            .collect::<std::collections::HashMap<_, _>>()
+    };
+
+    for pack in payload.packs {
+        if let Some(sanitized) = sanitize_pack(&pack) {
+            map.insert(sanitized.id.clone(), sanitized);
+        }
+    }
+
+    let mut merged = map.into_values().collect::<Vec<_>>();
+    merged.sort_by(|a, b| a.id.cmp(&b.id));
+    settings.jargon_packs = merged.clone();
+    settings::write_settings(&app, settings);
+    Ok(merged)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn export_jargon_packs_json(
+    app: AppHandle,
+    selected_pack_ids: Option<Vec<String>>,
+) -> Result<String, String> {
+    let settings = settings::get_settings(&app);
+    let selected = selected_pack_ids.unwrap_or_default();
+    let packs = if selected.is_empty() {
+        settings.jargon_packs
+    } else {
+        let selected_set = selected
+            .into_iter()
+            .collect::<std::collections::HashSet<_>>();
+        settings
+            .jargon_packs
+            .into_iter()
+            .filter(|pack| selected_set.contains(&pack.id))
+            .collect::<Vec<_>>()
+    };
+
+    let payload = JargonPackImportPayload { version: 1, packs };
+    serde_json::to_string_pretty(&payload)
+        .map_err(|e| format!("Failed to serialize jargon packs: {}", e))
 }
 
 #[tauri::command]

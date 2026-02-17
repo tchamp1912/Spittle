@@ -1,11 +1,16 @@
 [package]
-name = "handy"
-version = "0.7.5"
-description = "Handy"
-authors = ["cjpais"]
+name = "spittle"
+version = "0.1.0"
+description = "Spittle - Speech-to-text application"
+authors = ["Thomas Chambers", "CJ Pais (original Spittle)"]
 edition = "2021"
 license = "MIT"
-default-run = "handy"
+default-run = "spittle"
+
+[features]
+default = ["full_transcription"]
+full_transcription = ["dep:transcribe-rs"]
+mock_transcription = []
 
 [profile.dev]
 incremental = true # Compile your binary in smaller steps.
@@ -16,7 +21,7 @@ incremental = true # Compile your binary in smaller steps.
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "handy_app_lib"
+name = "spittle_app_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 # [[bin]]
@@ -68,13 +73,20 @@ chrono = "0.4"
 rusqlite = { version = "0.37", features = ["bundled"] }
 tar = "0.4.44"
 flate2 = "1.0"
-transcribe-rs = { version = "0.2.3", features = ["whisper", "parakeet", "moonshine", "sense_voice"] }
+transcribe-rs = { version = "0.2.3", optional = true, features = ["whisper", "parakeet", "moonshine", "sense_voice"] }
 handy-keys = "0.2.0"
 ferrous-opencc = "0.2.3"
 specta = "=2.0.0-rc.22"
 specta-typescript = "0.0.9"
 tauri-specta = { version = "=2.0.0-rc.21", features = ["derive", "typescript"] }
 tauri-plugin-dialog = "2"
+walkdir = "2"
+ort = { version = "2.0.0-rc.10", default-features = false }
+tokenizers = { version = "0.20", default-features = false, features = ["onig"] }
+ndarray = "0.16"
+async-trait = "0.1"
+similar = "2.5"
+get-selected-text = "0.1.6"
 
 [target.'cfg(unix)'.dependencies]
 signal-hook = "0.3"
@@ -96,15 +108,17 @@ windows = { version = "0.61.3", features = [
 
 [target.'cfg(target_os = "macos")'.dependencies]
 tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", branch = "v2.1" }
+core-foundation = "0.10"
+core-foundation-sys = "0.8"
 
 [target.'cfg(target_os = "linux")'.dependencies]
 gtk-layer-shell = { version = "0.8", features = ["v0_6"] }
 gtk = "0.18"
 
 [patch.crates-io]
-tauri-runtime = { git = "https://github.com/cjpais/tauri.git", branch = "handy-2.9.1" }
-tauri-runtime-wry = { git = "https://github.com/cjpais/tauri.git", branch = "handy-2.9.1" }
-tauri-utils = { git = "https://github.com/cjpais/tauri.git", branch = "handy-2.9.1" }
+tauri-runtime = { git = "https://github.com/cjpais/tauri.git", rev = "8ba98c7b543ec155961e1840641b1f28c548b8dd" }
+tauri-runtime-wry = { git = "https://github.com/cjpais/tauri.git", rev = "8ba98c7b543ec155961e1840641b1f28c548b8dd" }
+tauri-utils = { git = "https://github.com/cjpais/tauri.git", rev = "8ba98c7b543ec155961e1840641b1f28c548b8dd" }
 
 [dev-dependencies]
 tempfile = "3"

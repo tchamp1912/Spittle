@@ -1,7 +1,7 @@
 use hound::WavWriter;
 use std::io::{self, Write};
 
-use handy_app_lib::audio_toolkit::{
+use spittle_app_lib::audio_toolkit::{
     audio::{list_input_devices, CpalDeviceInfo},
     vad::SmoothedVad,
     AudioRecorder, SileroVad,
@@ -105,7 +105,7 @@ impl RecorderState {
                     if self.is_open {
                         self.recorder.close()?;
                     }
-                    self.recorder.open(device)?;
+                    self.recorder.open(device, None, None)?;
                     self.is_open = true;
                     self.current_device_index = device_index;
                     println!("Opened recorder in Always-On mode");
@@ -117,7 +117,7 @@ impl RecorderState {
                 if self.is_open {
                     self.recorder.close()?;
                 }
-                self.recorder.open(device)?;
+                self.recorder.open(device, None, None)?;
                 self.is_open = true;
                 self.current_device_index = device_index;
                 self.recorder.start()?;

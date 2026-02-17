@@ -112,6 +112,42 @@ pub fn send_paste_shift_insert(enigo: &mut Enigo) -> Result<(), String> {
     Ok(())
 }
 
+/// Sends `count` Left arrow key presses to move the cursor backward.
+pub fn send_left_arrow(enigo: &mut Enigo, count: usize) -> Result<(), String> {
+    const BATCH_SIZE: usize = 20;
+    const BATCH_DELAY: std::time::Duration = std::time::Duration::from_millis(30);
+
+    for i in 0..count {
+        enigo
+            .key(Key::LeftArrow, enigo::Direction::Click)
+            .map_err(|e| format!("Failed to send LeftArrow: {}", e))?;
+
+        if i > 0 && i % BATCH_SIZE == 0 {
+            std::thread::sleep(BATCH_DELAY);
+        }
+    }
+
+    Ok(())
+}
+
+/// Sends `count` Right arrow key presses to move the cursor forward.
+pub fn send_right_arrow(enigo: &mut Enigo, count: usize) -> Result<(), String> {
+    const BATCH_SIZE: usize = 20;
+    const BATCH_DELAY: std::time::Duration = std::time::Duration::from_millis(30);
+
+    for i in 0..count {
+        enigo
+            .key(Key::RightArrow, enigo::Direction::Click)
+            .map_err(|e| format!("Failed to send RightArrow: {}", e))?;
+
+        if i > 0 && i % BATCH_SIZE == 0 {
+            std::thread::sleep(BATCH_DELAY);
+        }
+    }
+
+    Ok(())
+}
+
 /// Pastes text directly using the enigo text method.
 /// This tries to use system input methods if possible, otherwise simulates keystrokes one by one.
 pub fn paste_text_direct(enigo: &mut Enigo, text: &str) -> Result<(), String> {

@@ -1,0 +1,49 @@
+{
+  "description": "Domain selector evals with broad + adversarial coverage",
+  "min_pass_rate": 0.82,
+  "settings": {
+    "top_k": 2,
+    "min_score": 0.08,
+    "timeout_ms": 80
+  },
+  "cases": [
+    { "id": "coding_rust_ci", "input": "I fixed the Rust compile error, updated Cargo, and opened a pull request after CI passed.", "expect_any_of": ["coding"], "forbid": ["law_enforcement"] },
+    { "id": "coding_api_design", "input": "We refactored the API layer, added gRPC endpoints, and updated GraphQL schema mappings.", "expect_any_of": ["coding"], "forbid": ["law_enforcement"] },
+    { "id": "coding_frontend_stack", "input": "The React TypeScript app now builds with Vite and deploys from GitHub actions.", "expect_any_of": ["coding"] },
+    { "id": "coding_data_store", "input": "I tuned PostgreSQL queries and added Redis caching for API latency.", "expect_any_of": ["coding"] },
+    { "id": "coding_pr_review", "input": "Please review this pull request, lint failures, and failing test snapshot.", "expect_any_of": ["coding"] },
+    { "id": "coding_cli_tooling", "input": "I wrote a Dockerized CLI for migrations and checked it with CI/CD.", "expect_any_of": ["coding"] },
+
+    { "id": "business_pipeline_metrics", "input": "Revenue and ARR improved this quarter, but CAC increased and we need better conversion rate on pipeline.", "expect_any_of": ["business"], "forbid": ["law_enforcement"] },
+    { "id": "business_planning", "input": "For quarterly planning we aligned KPI targets, ownership, and roadmap priorities.", "expect_any_of": ["business"], "forbid": ["law_enforcement"] },
+    { "id": "business_gtm", "input": "We refined go-to-market positioning, ICP assumptions, and channel strategy.", "expect_any_of": ["business"] },
+    { "id": "business_finance", "input": "The board reviewed runway, burn rate, and operating expense variance.", "expect_any_of": ["business"] },
+    { "id": "business_sales_ops", "input": "Sales pipeline forecast and close rate look healthy for next quarter.", "expect_any_of": ["business"] },
+    { "id": "business_exec_update", "input": "Executive update: customer retention improved while churn decreased.", "expect_any_of": ["business"] },
+
+    { "id": "law_enforcement_incident", "input": "Dispatch requested a BOLO update, patrol established a perimeter, and we documented chain of custody.", "expect_any_of": ["law_enforcement"], "forbid": ["business"] },
+    { "id": "law_enforcement_report", "input": "The incident report includes suspect details, probable cause notes, and evidence handling steps.", "expect_any_of": ["law_enforcement"], "forbid": ["business"] },
+    { "id": "law_enforcement_warrants", "input": "We served the search warrant and logged all evidence transfer details.", "expect_any_of": ["law_enforcement"] },
+    { "id": "law_enforcement_patrol", "input": "Patrol coordinated with dispatch after a citation and suspect stop.", "expect_any_of": ["law_enforcement"] },
+    { "id": "law_enforcement_deescalation", "input": "The report documents de-escalation, use-of-force review, and witness statements.", "expect_any_of": ["law_enforcement"] },
+    { "id": "law_enforcement_case_update", "input": "Case update includes detention notes and body camera evidence tags.", "expect_any_of": ["law_enforcement"] },
+
+    { "id": "mixed_business_coding", "input": "We shipped the API feature and reviewed KPI impact on conversion and customer retention.", "expect_any_of": ["coding", "business"] },
+    { "id": "mixed_coding_law_enforcement", "input": "We built a dispatch dashboard API and mapped incident report fields.", "expect_any_of": ["coding", "law_enforcement"] },
+    { "id": "mixed_business_law_enforcement", "input": "Leadership reviewed citation trends and quarterly staffing budget.", "expect_any_of": ["business", "law_enforcement"] },
+
+    { "id": "neutral_small_talk", "input": "I had coffee and walked the dog before lunch.", "expect_none": true },
+    { "id": "neutral_generic_work", "input": "I worked on a few things and then took a break.", "expect_none": true },
+
+    { "id": "edge_arrested_growth_phrase", "input": "We discussed arrested growth in our sales pipeline and retention.", "expect_any_of": ["business"], "track_only": true, "notes": "Contains law-like token 'arrested' in business context." },
+    { "id": "edge_dispatch_tablet_app", "input": "The dispatch tablet app now has an offline sync bug.", "expect_any_of": ["coding", "law_enforcement"], "track_only": true, "notes": "Could route either coding or law_enforcement." },
+    { "id": "edge_kpi_with_api", "input": "KPI dashboard API failed after deployment and affected conversion reporting.", "expect_any_of": ["business", "coding"], "track_only": true },
+    { "id": "edge_bolo_marketing_campaign", "input": "BOLO is also the name of our campaign codename in marketing planning.", "expect_any_of": ["business"], "track_only": true, "notes": "Intentional conflict with law_enforcement keyword." },
+    { "id": "edge_probable_cause_in_legal_review", "input": "The legal team debated probable cause language in policy training material.", "expect_any_of": ["law_enforcement", "business"], "track_only": true },
+    { "id": "edge_cli_revenue_tool", "input": "Built a CLI to reconcile revenue data with ARR reports.", "expect_any_of": ["coding", "business"], "track_only": true },
+    { "id": "edge_one_token_api", "input": "api", "expect_any_of": ["coding"], "track_only": true, "notes": "Very short input stress test." },
+    { "id": "edge_one_token_kpi", "input": "kpi", "expect_any_of": ["business"], "track_only": true, "notes": "Very short input stress test." },
+    { "id": "edge_one_token_bolo", "input": "bolo", "expect_any_of": ["law_enforcement"], "track_only": true, "notes": "Very short input stress test." },
+    { "id": "edge_empty_like_noise", "input": "um uh like hmm", "expect_none": true, "track_only": true, "notes": "Filler-only noise." }
+  ]
+}

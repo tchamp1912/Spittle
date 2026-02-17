@@ -194,6 +194,48 @@ fn extract_punctuation(word: &str) -> (&str, &str) {
     (prefix, suffix)
 }
 
+/// Cleans segment boundaries by stripping trailing punctuation from each segment,
+/// lowercasing everything, and joining into a single run-on sentence.
+/// The LLM post-processor (if enabled) can then add proper punctuation and capitalization.
+///
+/// # Arguments
+/// * `segments` - The individual transcription segments
+/// * `remaining` - The final transcription of remaining audio after segments
+///
+/// # Returns
+/// A single lowercased string with segment artifacts removed
+pub fn clean_segment_boundaries(segments: &[String], remaining: &str) -> String {
+    let mut parts: Vec<String> = Vec::new();
+
+    for segment in segments {
+        let trimmed = segment
+            .trim()
+            .trim_end_matches('.')
+            .trim_end_matches("...")
+            .trim_end_matches('!')
+            .trim_end_matches('?')
+            .trim_end_matches(',')
+            .trim();
+        if !trimmed.is_empty() {
+            parts.push(trimmed.to_lowercase());
+        }
+    }
+
+    let remaining_trimmed = remaining
+        .trim()
+        .trim_end_matches('.')
+        .trim_end_matches("...")
+        .trim_end_matches('!')
+        .trim_end_matches('?')
+        .trim_end_matches(',')
+        .trim();
+    if !remaining_trimmed.is_empty() {
+        parts.push(remaining_trimmed.to_lowercase());
+    }
+
+    parts.join(" ")
+}
+
 /// Filler words to remove from transcriptions
 const FILLER_WORDS: &[&str] = &[
     "uh", "um", "uhm", "umm", "uhh", "uhhh", "ah", "eh", "hmm", "hm", "mmm", "mm", "mh", "ha",
@@ -253,12 +295,75 @@ static FILLER_PATTERNS: Lazy<Vec<Regex>> = Lazy::new(|| {
         .collect()
 });
 
-/// Filters transcription output by removing filler words and stutter artifacts.
+/// Known Whisper hallucination phrases that appear when transcribing short or
+/// silent audio segments. Only used for whole-output matching.
+const HALLUCINATION_PHRASES: &[&str] = &[
+    "thank you for watching",
+    "thanks for watching",
+    "thank you for listening",
+    "thanks for listening",
+    "please subscribe",
+    "like and subscribe",
+    "see you next time",
+    "see you in the next video",
+    "bye bye",
+    "bye",
+    "thank you",
+    "thanks",
+    "subtitles by",
+    "you",
+];
+
+/// Regex patterns for hallucinations that contain variable parts (e.g. URLs).
+/// These match the entire output (after trimming/lowercasing).
+static HALLUCINATION_REGEXES: Lazy<Vec<Regex>> = Lazy::new(|| {
+    vec![
+        // Matches various forms of "for more information visit URL" hallucinations,
+        // including compound forms like "visit X or visit X for more information"
+        Regex::new(r"(?i)^(for more information[,.]?\s*)?(visit|go to)\s+\S+(\s+(or\s+)?(visit|go to)\s+\S+)*(\s+for more information)?[.,]?\s*$").unwrap(),
+        // "For more information, visit URL" as prefix
+        Regex::new(r"(?i)^for more information[,.]?\s*(visit|go to)\s+\S+[.,]?\s*$").unwrap(),
+        // "Subtitles by ..." (various attribution patterns)
+        Regex::new(r"(?i)^subtitles\s+(by|provided by|created by)\s+.*$").unwrap(),
+    ]
+});
+
+/// Checks whether the entire transcription is a known Whisper hallucination.
+///
+/// Returns `true` if the trimmed, punctuation-stripped, lowercased text matches
+/// any entry in `HALLUCINATION_PHRASES` exactly, or matches a hallucination regex pattern.
+fn is_hallucination(text: &str) -> bool {
+    let stripped: String = text
+        .trim()
+        .chars()
+        .filter(|c| c.is_alphanumeric() || c.is_whitespace())
+        .collect();
+    let normalized = stripped.trim().to_lowercase();
+    if normalized.is_empty() {
+        return false;
+    }
+
+    // Check exact phrase matches (punctuation-stripped)
+    if HALLUCINATION_PHRASES
+        .iter()
+        .any(|phrase| normalized == *phrase)
+    {
+        return true;
+    }
+
+    // Check regex patterns (on trimmed original, preserving punctuation for URL matching)
+    let trimmed = text.trim();
+    HALLUCINATION_REGEXES.iter().any(|re| re.is_match(trimmed))
+}
+
+/// Filters transcription output by removing filler words, stutter artifacts,
+/// and known Whisper hallucinations.
 ///
 /// This function cleans up raw transcription text by:
 /// 1. Removing filler words (uh, um, hmm, etc.)
 /// 2. Collapsing repeated 1-2 letter stutters (e.g., "wh wh wh" -> "wh")
 /// 3. Cleaning up excess whitespace
+/// 4. Discarding the entire output if it is a known hallucination phrase
 ///
 /// # Arguments
 /// * `text` - The raw transcription text to filter
@@ -280,7 +385,14 @@ pub fn filter_transcription_output(text: &str) -> String {
     filtered = MULTI_SPACE_PATTERN.replace_all(&filtered, " ").to_string();
 
     // Trim leading/trailing whitespace
-    filtered.trim().to_string()
+    filtered = filtered.trim().to_string();
+
+    // Discard entire output if it is a known hallucination phrase
+    if is_hallucination(&filtered) {
+        return String::new();
+    }
+
+    filtered
 }
 
 #[cfg(test)]
@@ -457,5 +569,105 @@ mod tests {
             "got double-counted result: {}",
             result
         );
+    }
+
+    #[test]
+    fn test_hallucination_exact_match() {
+        assert_eq!(filter_transcription_output("Thank you for watching"), "");
+        assert_eq!(filter_transcription_output("bye"), "");
+        assert_eq!(filter_transcription_output("you"), "");
+    }
+
+    #[test]
+    fn test_hallucination_case_insensitive() {
+        assert_eq!(filter_transcription_output("THANK YOU FOR WATCHING"), "");
+        assert_eq!(filter_transcription_output("Thank You"), "");
+        assert_eq!(filter_transcription_output("Please Subscribe"), "");
+    }
+
+    #[test]
+    fn test_hallucination_with_trailing_punctuation() {
+        assert_eq!(filter_transcription_output("Thank you for watching."), "");
+        assert_eq!(filter_transcription_output("Bye bye!"), "");
+        assert_eq!(filter_transcription_output("Thanks..."), "");
+        assert_eq!(filter_transcription_output("See you next time!"), "");
+    }
+
+    #[test]
+    fn test_hallucination_url_patterns() {
+        assert_eq!(
+            filter_transcription_output("For more information, visit www.microsoft.com"),
+            ""
+        );
+        assert_eq!(
+            filter_transcription_output(
+                "For more information, visit www.microsoft.com or visit www.microsoft.com for more information."
+            ),
+            ""
+        );
+        assert_eq!(
+            filter_transcription_output("Visit www.example.org for more information."),
+            ""
+        );
+        assert_eq!(
+            filter_transcription_output("Subtitles by the Amara.org community"),
+            ""
+        );
+    }
+
+    #[test]
+    fn test_clean_segment_boundaries_basic() {
+        let segments = vec![
+            "So I'm trying out.".to_string(),
+            "With parakeet instead of Whisper.".to_string(),
+            "Because it seems to have better.".to_string(),
+        ];
+        let result = clean_segment_boundaries(&segments, "Who cares?");
+        assert_eq!(
+            result,
+            "so i'm trying out with parakeet instead of whisper because it seems to have better who cares"
+        );
+    }
+
+    #[test]
+    fn test_clean_segment_boundaries_ellipsis() {
+        let segments = vec![
+            "And see if that...".to_string(),
+            "It starts to collapse.".to_string(),
+        ];
+        let result = clean_segment_boundaries(&segments, "");
+        assert_eq!(result, "and see if that it starts to collapse");
+    }
+
+    #[test]
+    fn test_clean_segment_boundaries_empty_segments() {
+        let segments: Vec<String> = vec![];
+        let result = clean_segment_boundaries(&segments, "Just the remaining text.");
+        assert_eq!(result, "just the remaining text");
+    }
+
+    #[test]
+    fn test_clean_segment_boundaries_no_remaining() {
+        let segments = vec!["Hello world.".to_string(), "Goodbye.".to_string()];
+        let result = clean_segment_boundaries(&segments, "");
+        assert_eq!(result, "hello world goodbye");
+    }
+
+    #[test]
+    fn test_hallucination_does_not_filter_legitimate_text() {
+        // Text that contains hallucination phrases as substrings should NOT be filtered
+        let result =
+            filter_transcription_output("Thank you for watching the demo, now let me explain");
+        assert!(!result.is_empty());
+
+        let result = filter_transcription_output("I want to say thank you for the help");
+        assert!(!result.is_empty());
+
+        let result = filter_transcription_output("Please subscribe to the newsletter for updates");
+        assert!(!result.is_empty());
+
+        let result =
+            filter_transcription_output("See you next time we discuss this topic in detail");
+        assert!(!result.is_empty());
     }
 }

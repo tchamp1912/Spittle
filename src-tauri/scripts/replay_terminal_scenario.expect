@@ -1,0 +1,45 @@
+#!/usr/bin/expect -f
+
+set timeout 30
+
+if {[llength $argv] != 2} {
+  puts stderr "Usage: replay_terminal_scenario.expect <scenario_json> <history_file>"
+  exit 2
+}
+
+set scenario_file [lindex $argv 0]
+set history_file [lindex $argv 1]
+
+set hypotheses_raw [exec jq -r {.hypotheses[]} $scenario_file]
+set hypotheses [split [string trim $hypotheses_raw] "\n"]
+
+spawn env HISTFILE=$history_file HISTSIZE=2000 HISTFILESIZE=2000 bash --noprofile --norc -i
+
+expect -re {[$#] $}
+send "set +H\r"
+expect -re {[$#] $}
+send "shopt -s histappend\r"
+expect -re {[$#] $}
+send "PS1='PROMPT> '\r"
+expect "PROMPT> "
+
+set prev_len 0
+set first 1
+foreach hyp $hypotheses {
+  if {$first} {
+    send -- $hyp
+    set first 0
+  } else {
+    for {set i 0} {$i < $prev_len} {incr i} {
+      # DEL key (backspace in most terminal line editors)
+      send "\177"
+    }
+    send -- $hyp
+  }
+  set prev_len [string length $hyp]
+}
+
+send "\r"
+expect "PROMPT> "
+send "exit\r"
+expect eof

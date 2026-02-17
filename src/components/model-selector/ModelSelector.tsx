@@ -82,7 +82,9 @@ const ModelSelector: React.FC<ModelSelectorProps> = ({ onError }) => {
             setModelStatus("loading");
             setModelError(null);
             break;
+          // Backward-compatible: older code used "loading_completed", current backend emits "loaded".
           case "loading_completed":
+          case "loaded":
             setModelStatus("ready");
             setModelError(null);
             setPendingModelId(null);

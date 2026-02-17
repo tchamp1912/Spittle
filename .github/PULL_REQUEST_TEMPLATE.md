@@ -2,8 +2,8 @@
 
 **Please confirm you have done the following:**
 
-- [ ] I have searched [existing issues](https://github.com/cjpais/Handy/issues) and [pull requests](https://github.com/cjpais/Handy/pulls) (including closed ones) to ensure this isn't a duplicate
-- [ ] I have read [CONTRIBUTING.md](https://github.com/cjpais/Handy/blob/main/CONTRIBUTING.md)
+- [ ] I have searched [existing issues](https://github.com/tchamp1912/Spittle/issues) and [pull requests](https://github.com/tchamp1912/Spittle/pulls) (including closed ones) to ensure this isn't a duplicate
+- [ ] I have read [CONTRIBUTING.md](https://github.com/tchamp1912/Spittle/blob/main/CONTRIBUTING.md)
 
 **If this is a feature or change that was previously closed/rejected:**
 
@@ -39,7 +39,7 @@ For features: Link to a discussion where community members have expressed intere
 For bug fixes: Link to the issue where others have confirmed the bug.
 
 If you haven't gathered feedback yet, consider starting a discussion first:
-https://github.com/cjpais/Handy/discussions
+https://github.com/tchamp1912/Spittle/discussions
 
 It is not explicitly required to gather feedback, but it certainly helps your PR get merged.
 -->

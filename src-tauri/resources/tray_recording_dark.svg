@@ -1,0 +1,14 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Recording state (dark theme) -->
+  <rect width="128" height="128" fill="transparent"/>
+
+  <!-- Water droplet -->
+  <path d="M64 20C64 20 48 45 48 60C48 75.4 54.7 88 64 88C73.3 88 80 75.4 80 60C80 45 64 20 64 20Z" fill="#38bdf8" stroke="#38bdf8" stroke-width="1"/>
+
+  <!-- Highlight -->
+  <ellipse cx="58" cy="38" rx="6" ry="10" fill="#e0f2fe" opacity="0.6"/>
+
+  <!-- Recording indicator (red dot) -->
+  <circle cx="95" cy="32" r="8" fill="#ef4444"/>
+  <circle cx="95" cy="32" r="6" fill="#dc2626"/>
+</svg>

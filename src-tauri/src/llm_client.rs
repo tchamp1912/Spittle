@@ -38,13 +38,13 @@ fn build_headers(provider: &PostProcessProvider, api_key: &str) -> Result<Header
     headers.insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
     headers.insert(
         REFERER,
-        HeaderValue::from_static("https://github.com/cjpais/Handy"),
+        HeaderValue::from_static("https://github.com/tchamp1912/Spittle"),
     );
     headers.insert(
         USER_AGENT,
-        HeaderValue::from_static("Handy/1.0 (+https://github.com/cjpais/Handy)"),
+        HeaderValue::from_static("Spittle/1.0 (+https://github.com/tchamp1912/Spittle)"),
     );
-    headers.insert("X-Title", HeaderValue::from_static("Handy"));
+    headers.insert("X-Title", HeaderValue::from_static("Spittle"));
 
     // Provider-specific auth headers
     if !api_key.is_empty() {
@@ -76,14 +76,18 @@ fn create_client(provider: &PostProcessProvider, api_key: &str) -> Result<reqwes
         .map_err(|e| format!("Failed to build HTTP client: {}", e))
 }
 
-/// Send a chat completion request to an OpenAI-compatible API
+/// Send a chat completion request to an OpenAI-compatible API.
 /// Returns Ok(Some(content)) on success, Ok(None) if response has no content,
 /// or Err on actual errors (HTTP, parsing, etc.)
+///
+/// An optional `system_message` is sent as a separate system role message
+/// before the user prompt, ensuring the LLM treats it as instructions.
 pub async fn send_chat_completion(
     provider: &PostProcessProvider,
     api_key: String,
     model: &str,
     prompt: String,
+    system_message: Option<String>,
 ) -> Result<Option<String>, String> {
     let base_url = provider.base_url.trim_end_matches('/');
     let url = format!("{}/chat/completions", base_url);
@@ -92,12 +96,21 @@ pub async fn send_chat_completion(
 
     let client = create_client(provider, &api_key)?;
 
+    let mut messages = Vec::new();
+    if let Some(system) = system_message {
+        messages.push(ChatMessage {
+            role: "system".to_string(),
+            content: system,
+        });
+    }
+    messages.push(ChatMessage {
+        role: "user".to_string(),
+        content: prompt,
+    });
+
     let request_body = ChatCompletionRequest {
         model: model.to_string(),
-        messages: vec![ChatMessage {
-            role: "user".to_string(),
-            content: prompt,
-        }],
+        messages,
     };
 
     let response = client

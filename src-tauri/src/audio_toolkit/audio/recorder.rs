@@ -54,7 +54,12 @@ impl AudioRecorder {
         self
     }
 
-    pub fn open(&mut self, device: Option<Device>) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn open(
+        &mut self,
+        device: Option<Device>,
+        segment_tx: Option<mpsc::Sender<Vec<f32>>>,
+        segment_size_samples: Option<usize>,
+    ) -> Result<(), Box<dyn std::error::Error>> {
         if self.worker_handle.is_some() {
             return Ok(()); // already open
         }
@@ -117,7 +122,15 @@ impl AudioRecorder {
             stream.play().expect("failed to start stream");
 
             // keep the stream alive while we process samples
-            run_consumer(sample_rate, vad, sample_rx, cmd_rx, level_cb);
+            run_consumer(
+                sample_rate,
+                vad,
+                sample_rx,
+                cmd_rx,
+                level_cb,
+                segment_tx,
+                segment_size_samples,
+            );
             // stream is dropped here, after run_consumer returns
         });
 
@@ -245,6 +258,8 @@ fn run_consumer(
     sample_rx: mpsc::Receiver<Vec<f32>>,
     cmd_rx: mpsc::Receiver<Cmd>,
     level_cb: Option<Arc<dyn Fn(Vec<f32>) + Send + Sync + 'static>>,
+    segment_tx: Option<mpsc::Sender<Vec<f32>>>,
+    segment_size_samples: Option<usize>,
 ) {
     let mut frame_resampler = FrameResampler::new(
         in_sample_rate as usize,
@@ -271,6 +286,8 @@ fn run_consumer(
         recording: bool,
         vad: &Option<Arc<Mutex<Box<dyn vad::VoiceActivityDetector>>>>,
         out_buf: &mut Vec<f32>,
+        segment_tx: &Option<mpsc::Sender<Vec<f32>>>,
+        segment_size_samples: Option<usize>,
     ) {
         if !recording {
             return;
@@ -284,6 +301,15 @@ fn run_consumer(
             }
         } else {
             out_buf.extend_from_slice(samples);
+        }
+
+        if let (Some(tx), Some(target)) = (segment_tx, segment_size_samples) {
+            if target > 0 {
+                while out_buf.len() >= target {
+                    let segment: Vec<f32> = out_buf.drain(..target).collect();
+                    let _ = tx.send(segment);
+                }
+            }
         }
     }
 
@@ -302,7 +328,14 @@ fn run_consumer(
 
         // ---------- existing pipeline ------------------------------------ //
         frame_resampler.push(&raw, &mut |frame: &[f32]| {
-            handle_frame(frame, recording, &vad, &mut processed_samples)
+            handle_frame(
+                frame,
+                recording,
+                &vad,
+                &mut processed_samples,
+                &segment_tx,
+                segment_size_samples,
+            )
         });
 
         // non-blocking check for a command
@@ -321,7 +354,14 @@ fn run_consumer(
 
                     frame_resampler.finish(&mut |frame: &[f32]| {
                         // we still want to process the last few frames
-                        handle_frame(frame, true, &vad, &mut processed_samples)
+                        handle_frame(
+                            frame,
+                            true,
+                            &vad,
+                            &mut processed_samples,
+                            &segment_tx,
+                            segment_size_samples,
+                        )
                     });
 
                     let _ = reply_tx.send(std::mem::take(&mut processed_samples));

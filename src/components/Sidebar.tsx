@@ -1,8 +1,16 @@
 import React from "react";
 import { useTranslation } from "react-i18next";
-import { Cog, FlaskConical, History, Info, Sparkles, Cpu } from "lucide-react";
-import HandyTextLogo from "./icons/HandyTextLogo";
-import HandyHand from "./icons/HandyHand";
+import {
+  Cog,
+  FlaskConical,
+  History,
+  Info,
+  Sparkles,
+  Cpu,
+  BookText,
+} from "lucide-react";
+import SpittleTextLogo from "./icons/SpittleTextLogo";
+import SpittleIcon from "./icons/SpittleIcon";
 import { useSettings } from "../hooks/useSettings";
 import {
   GeneralSettings,
@@ -12,6 +20,8 @@ import {
   AboutSettings,
   PostProcessingSettings,
   ModelsSettings,
+  JargonSettings,
+  JargonPacksSettings,
 } from "./settings";
 
 export type SidebarSection = keyof typeof SECTIONS_CONFIG;
@@ -34,7 +44,7 @@ interface SectionConfig {
 export const SECTIONS_CONFIG = {
   general: {
     labelKey: "sidebar.general",
-    icon: HandyHand,
+    icon: SpittleIcon,
     component: GeneralSettings,
     enabled: () => true,
   },
@@ -48,6 +58,18 @@ export const SECTIONS_CONFIG = {
     labelKey: "sidebar.advanced",
     icon: Cog,
     component: AdvancedSettings,
+    enabled: () => true,
+  },
+  jargon: {
+    labelKey: "sidebar.jargon",
+    icon: BookText,
+    component: JargonSettings,
+    enabled: () => true,
+  },
+  jargonPacks: {
+    labelKey: "sidebar.jargonPacks",
+    icon: BookText,
+    component: JargonPacksSettings,
     enabled: () => true,
   },
   postprocessing: {
@@ -94,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <div className="flex flex-col w-40 h-full border-e border-mid-gray/20 items-center px-2">
-      <HandyTextLogo width={120} className="m-4" />
+      <SpittleTextLogo width={120} className="m-4" />
       <div className="flex flex-col w-full items-center gap-1 pt-2 border-t border-mid-gray/20">
         {availableSections.map((section) => {
           const Icon = section.icon;

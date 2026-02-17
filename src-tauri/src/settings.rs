@@ -93,6 +93,16 @@ pub struct LLMPrompt {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
+pub struct JargonPack {
+    pub id: String,
+    pub label: String,
+    #[serde(default)]
+    pub terms: Vec<String>,
+    #[serde(default)]
+    pub corrections: Vec<crate::jargon::JargonCorrection>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct PostProcessProvider {
     pub id: String,
     pub label: String,
@@ -272,7 +282,7 @@ impl Default for TypingTool {
     }
 }
 
-/* still handy for composing the initial JSON in the store ------------- */
+/* still spittle for composing the initial JSON in the store ------------- */
 #[derive(Serialize, Deserialize, Debug, Clone, Type)]
 pub struct AppSettings {
     pub bindings: HashMap<String, ShortcutBinding>,
@@ -328,6 +338,8 @@ pub struct AppSettings {
     pub auto_submit_key: AutoSubmitKey,
     #[serde(default = "default_post_process_enabled")]
     pub post_process_enabled: bool,
+    #[serde(default = "default_post_process_auto_prompt_selection")]
+    pub post_process_auto_prompt_selection: bool,
     #[serde(default = "default_post_process_provider_id")]
     pub post_process_provider_id: String,
     #[serde(default = "default_post_process_providers")]
@@ -342,6 +354,8 @@ pub struct AppSettings {
     pub post_process_selected_prompt_id: Option<String>,
     #[serde(default)]
     pub mute_while_recording: bool,
+    #[serde(default = "default_audio_segment_size_seconds")]
+    pub audio_segment_size_seconds: f64,
     #[serde(default)]
     pub append_trailing_space: bool,
     #[serde(default = "default_app_language")]
@@ -356,6 +370,30 @@ pub struct AppSettings {
     pub paste_delay_ms: u64,
     #[serde(default = "default_typing_tool")]
     pub typing_tool: TypingTool,
+    #[serde(default)]
+    pub at_file_expansion_enabled: bool,
+    #[serde(default)]
+    pub recent_workspace_roots: Vec<String>,
+    #[serde(default)]
+    pub jargon_enabled_profiles: Vec<String>,
+    #[serde(default)]
+    pub jargon_custom_terms: Vec<String>,
+    #[serde(default)]
+    pub jargon_custom_corrections: Vec<crate::jargon::JargonCorrection>,
+    #[serde(default = "default_domain_selector_enabled")]
+    pub domain_selector_enabled: bool,
+    #[serde(default = "default_domain_selector_timeout_ms")]
+    pub domain_selector_timeout_ms: u64,
+    #[serde(default = "default_domain_selector_top_k")]
+    pub domain_selector_top_k: usize,
+    #[serde(default = "default_domain_selector_min_score")]
+    pub domain_selector_min_score: f32,
+    #[serde(default = "default_domain_selector_hysteresis")]
+    pub domain_selector_hysteresis: f32,
+    #[serde(default = "default_domain_selector_blend_manual_profiles")]
+    pub domain_selector_blend_manual_profiles: bool,
+    #[serde(default)]
+    pub jargon_packs: Vec<JargonPack>,
 }
 
 fn default_model() -> String {
@@ -368,6 +406,10 @@ fn default_always_on_microphone() -> bool {
 
 fn default_translate_to_english() -> bool {
     false
+}
+
+fn default_audio_segment_size_seconds() -> f64 {
+    0.0
 }
 
 fn default_start_hidden() -> bool {
@@ -430,6 +472,10 @@ fn default_sound_theme() -> SoundTheme {
 }
 
 fn default_post_process_enabled() -> bool {
+    false
+}
+
+fn default_post_process_auto_prompt_selection() -> bool {
     false
 }
 
@@ -539,16 +585,111 @@ fn default_post_process_models() -> HashMap<String, String> {
     map
 }
 
+fn builtin_post_process_prompts() -> Vec<LLMPrompt> {
+    vec![
+        LLMPrompt {
+            id: "default_improve_transcriptions".to_string(),
+            name: "Improve Transcriptions".to_string(),
+            prompt: "Clean this transcript for readability while preserving meaning:\n1. Fix spelling, capitalization, punctuation, and spacing\n2. Convert spoken number words to digits when clear\n3. Remove obvious filler words and false starts only when confidence is high\n4. Keep technical terms and identifiers exact\n\nReturn only the cleaned transcript text.\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_coding_assistant".to_string(),
+            name: "Coding Assistant".to_string(),
+            prompt: "Rewrite this transcript into an engineering update.\n\nOutput format:\n## Summary\n- 2-4 factual bullets\n## Tasks\n- [ ] Task\n## Notes\n- Optional short bullets\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_slack_message".to_string(),
+            name: "Slack Message".to_string(),
+            prompt: "Convert this transcript into a concise Slack update.\n1. Keep it direct, friendly, and skimmable\n2. Preserve decisions, blockers, owners, and dates exactly\n3. Keep to 80-140 words unless source is shorter\n\nReturn only the final Slack message body.\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_email_draft".to_string(),
+            name: "Email Draft".to_string(),
+            prompt: "Transform this transcript into a professional email draft.\n\nOutput format:\nSubject: <clear subject>\n<body paragraphs>\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_document_writer".to_string(),
+            name: "Document Writer".to_string(),
+            prompt: "Turn this transcript into a structured document draft.\n\nOutput format:\n# Title\n## Context\n## Details\n## Decisions\n## Next Steps\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_meeting_notes".to_string(),
+            name: "Meeting Notes".to_string(),
+            prompt: "Convert this transcript into clean meeting notes.\n\nOutput format:\n## Summary\n- Bullet points\n## Decisions\n- Bullet points\n## Open Questions\n- Bullet points\n## Action Items\n- [ ] Owner - Task (Due: date or TBA)\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_action_items".to_string(),
+            name: "Action Items".to_string(),
+            prompt: "Extract only actionable tasks from this transcript.\n\nOutput format:\n- [ ] Owner - Task (Due: date or TBA)\n\nRules:\n- Use \"Unassigned\" when owner is unknown\n- Do not include non-actionable commentary\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_standup_update".to_string(),
+            name: "Standup Update".to_string(),
+            prompt: "Rewrite this transcript into a daily standup update.\n\nOutput format:\nYesterday:\n- Bullet points\nToday:\n- Bullet points\nBlockers:\n- Bullet points or \"None\"\n\nRules:\n- Max 3 bullets per section\n- Keep under 120 words when possible\n- Do not add details not present in source\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_pr_description".to_string(),
+            name: "PR Description".to_string(),
+            prompt: "Turn this transcript into a pull request description.\n\nOutput format:\n## Summary\n## Changes\n## Testing\n## Reviewer Checklist\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_ticket_writer".to_string(),
+            name: "Jira Ticket".to_string(),
+            prompt: "Convert this transcript into a clear engineering ticket.\n\nOutput format:\nTitle: <specific title>\nDescription:\nAcceptance Criteria:\n- ...\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_commit_message".to_string(),
+            name: "Commit Message".to_string(),
+            prompt: "Create a conventional commit message from this transcript.\n\nRules:\n- Use one type: feat, fix, chore, refactor, docs, test\n- Keep subject <= 72 chars\n- Add body only if needed\n\nReturn only the commit message.\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_release_notes".to_string(),
+            name: "Release Notes".to_string(),
+            prompt: "Rewrite this transcript into end-user release notes.\n\nOutput format:\n## Added\n## Improved\n## Fixed\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_customer_support_reply".to_string(),
+            name: "Support Reply".to_string(),
+            prompt: "Turn this transcript into a customer support response.\n\nRules:\n- Keep tone empathetic and concise\n- Clearly state next steps\n- Ask only necessary follow-up questions\n\nReturn only the final reply.\n\nTranscript:\n${output}".to_string(),
+        },
+        LLMPrompt {
+            id: "default_brain_dump_to_outline".to_string(),
+            name: "Brain Dump to Outline".to_string(),
+            prompt: "Organize this transcript into a structured outline.\n\nOutput format:\n# Main Topic\n## Section\n- Bullet\n\nTranscript:\n${output}".to_string(),
+        },
+    ]
+}
+
 fn default_post_process_prompts() -> Vec<LLMPrompt> {
-    vec![LLMPrompt {
-        id: "default_improve_transcriptions".to_string(),
-        name: "Improve Transcriptions".to_string(),
-        prompt: "Clean this transcript:\n1. Fix spelling, capitalization, and punctuation errors\n2. Convert number words to digits (twenty-five → 25, ten percent → 10%, five dollars → $5)\n3. Replace spoken punctuation with symbols (period → ., comma → ,, question mark → ?)\n4. Remove filler words (um, uh, like as filler)\n5. Keep the language in the original version (if it was french, keep it in french for example)\n\nPreserve exact meaning and word order. Do not paraphrase or reorder content.\n\nReturn only the cleaned transcript.\n\nTranscript:\n${output}".to_string(),
-    }]
+    builtin_post_process_prompts()
 }
 
 fn default_typing_tool() -> TypingTool {
     TypingTool::Auto
+}
+
+fn default_domain_selector_enabled() -> bool {
+    false
+}
+
+fn default_domain_selector_timeout_ms() -> u64 {
+    120
+}
+
+fn default_domain_selector_top_k() -> usize {
+    2
+}
+
+fn default_domain_selector_min_score() -> f32 {
+    0.1
+}
+
+fn default_domain_selector_hysteresis() -> f32 {
+    0.08
+}
+
+fn default_domain_selector_blend_manual_profiles() -> bool {
+    true
 }
 
 fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
@@ -587,10 +728,132 @@ fn ensure_post_process_defaults(settings: &mut AppSettings) -> bool {
         }
     }
 
+    for prompt in builtin_post_process_prompts() {
+        if settings
+            .post_process_prompts
+            .iter()
+            .all(|existing| existing.id != prompt.id)
+        {
+            settings.post_process_prompts.push(prompt);
+            changed = true;
+        }
+    }
+
+    changed
+}
+
+fn ensure_jargon_pack_defaults(settings: &mut AppSettings) -> bool {
+    let mut changed = false;
+    let mut seen_ids = std::collections::HashSet::new();
+    let mut filtered = Vec::new();
+
+    for pack in &settings.jargon_packs {
+        let id = pack.id.trim();
+        let label = pack.label.trim();
+        if id.is_empty() || label.is_empty() || !seen_ids.insert(id.to_string()) {
+            changed = true;
+            continue;
+        }
+        filtered.push(JargonPack {
+            id: id.to_string(),
+            label: label.to_string(),
+            terms: pack
+                .terms
+                .iter()
+                .map(|term| term.trim().to_string())
+                .filter(|term| !term.is_empty())
+                .collect(),
+            corrections: pack
+                .corrections
+                .iter()
+                .filter(|item| !item.from.trim().is_empty() && !item.to.trim().is_empty())
+                .cloned()
+                .collect(),
+        });
+    }
+
+    if filtered.len() != settings.jargon_packs.len() {
+        changed = true;
+    }
+    settings.jargon_packs = filtered;
+
+    let clamped_top_k = settings.domain_selector_top_k.clamp(1, 5);
+    if settings.domain_selector_top_k != clamped_top_k {
+        settings.domain_selector_top_k = clamped_top_k;
+        changed = true;
+    }
+
+    let clamped_timeout = settings.domain_selector_timeout_ms.clamp(25, 2000);
+    if settings.domain_selector_timeout_ms != clamped_timeout {
+        settings.domain_selector_timeout_ms = clamped_timeout;
+        changed = true;
+    }
+
+    let clamped_min_score = settings.domain_selector_min_score.clamp(0.0, 1.0);
+    if (settings.domain_selector_min_score - clamped_min_score).abs() > f32::EPSILON {
+        settings.domain_selector_min_score = clamped_min_score;
+        changed = true;
+    }
+
+    let clamped_hysteresis = settings.domain_selector_hysteresis.clamp(0.0, 1.0);
+    if (settings.domain_selector_hysteresis - clamped_hysteresis).abs() > f32::EPSILON {
+        settings.domain_selector_hysteresis = clamped_hysteresis;
+        changed = true;
+    }
+
     changed
 }
 
 pub const SETTINGS_STORE_PATH: &str = "settings_store.json";
+const SETTINGS_SCHEMA_VERSION: u32 = 1;
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct PersistedSettings {
+    schema_version: u32,
+    settings: AppSettings,
+}
+
+fn decode_settings(value: serde_json::Value) -> Result<(AppSettings, bool), serde_json::Error> {
+    if let Ok(persisted) = serde_json::from_value::<PersistedSettings>(value.clone()) {
+        return Ok((persisted.settings, true));
+    }
+    serde_json::from_value::<AppSettings>(value).map(|settings| (settings, false))
+}
+
+fn encode_settings(settings: &AppSettings) -> serde_json::Value {
+    serde_json::to_value(PersistedSettings {
+        schema_version: SETTINGS_SCHEMA_VERSION,
+        settings: settings.clone(),
+    })
+    .unwrap_or_else(|_| serde_json::json!({}))
+}
+
+fn merge_default_bindings(settings: &mut AppSettings) -> bool {
+    let default_settings = get_default_settings();
+    let mut updated = false;
+    for (key, value) in default_settings.bindings {
+        if !settings.bindings.contains_key(&key) {
+            debug!("Adding missing binding: {}", key);
+            settings.bindings.insert(key, value);
+            updated = true;
+        }
+    }
+    updated
+}
+
+fn migrate_settings(settings: &mut AppSettings) -> bool {
+    let mut changed = false;
+    if merge_default_bindings(settings) {
+        changed = true;
+    }
+    if ensure_post_process_defaults(settings) {
+        changed = true;
+    }
+    if ensure_jargon_pack_defaults(settings) {
+        changed = true;
+    }
+    changed
+}
 
 pub fn get_default_settings() -> AppSettings {
     #[cfg(target_os = "windows")]
@@ -673,6 +936,7 @@ pub fn get_default_settings() -> AppSettings {
         auto_submit: default_auto_submit(),
         auto_submit_key: AutoSubmitKey::default(),
         post_process_enabled: default_post_process_enabled(),
+        post_process_auto_prompt_selection: default_post_process_auto_prompt_selection(),
         post_process_provider_id: default_post_process_provider_id(),
         post_process_providers: default_post_process_providers(),
         post_process_api_keys: default_post_process_api_keys(),
@@ -680,6 +944,7 @@ pub fn get_default_settings() -> AppSettings {
         post_process_prompts: default_post_process_prompts(),
         post_process_selected_prompt_id: None,
         mute_while_recording: false,
+        audio_segment_size_seconds: default_audio_segment_size_seconds(),
         append_trailing_space: false,
         app_language: default_app_language(),
         experimental_enabled: false,
@@ -687,6 +952,18 @@ pub fn get_default_settings() -> AppSettings {
         show_tray_icon: default_show_tray_icon(),
         paste_delay_ms: default_paste_delay_ms(),
         typing_tool: default_typing_tool(),
+        at_file_expansion_enabled: false,
+        recent_workspace_roots: Vec::new(),
+        jargon_enabled_profiles: Vec::new(),
+        jargon_custom_terms: Vec::new(),
+        jargon_custom_corrections: Vec::new(),
+        domain_selector_enabled: default_domain_selector_enabled(),
+        domain_selector_timeout_ms: default_domain_selector_timeout_ms(),
+        domain_selector_top_k: default_domain_selector_top_k(),
+        domain_selector_min_score: default_domain_selector_min_score(),
+        domain_selector_hysteresis: default_domain_selector_hysteresis(),
+        domain_selector_blend_manual_profiles: default_domain_selector_blend_manual_profiles(),
+        jargon_packs: Vec::new(),
     }
 }
 
@@ -719,48 +996,22 @@ pub fn load_or_create_app_settings(app: &AppHandle) -> AppSettings {
         .store(SETTINGS_STORE_PATH)
         .expect("Failed to initialize store");
 
-    let mut settings = if let Some(settings_value) = store.get("settings") {
-        // Parse the entire settings object
-        match serde_json::from_value::<AppSettings>(settings_value) {
-            Ok(mut settings) => {
-                debug!("Found existing settings: {:?}", settings);
-                let default_settings = get_default_settings();
-                let mut updated = false;
-
-                // Merge default bindings into existing settings
-                for (key, value) in default_settings.bindings {
-                    if !settings.bindings.contains_key(&key) {
-                        debug!("Adding missing binding: {}", key);
-                        settings.bindings.insert(key, value);
-                        updated = true;
-                    }
-                }
-
-                if updated {
-                    debug!("Settings updated with new bindings");
-                    store.set("settings", serde_json::to_value(&settings).unwrap());
-                }
-
-                settings
-            }
+    let (mut settings, was_versioned) = if let Some(settings_value) = store.get("settings") {
+        match decode_settings(settings_value) {
+            Ok((settings, was_versioned)) => (settings, was_versioned),
             Err(e) => {
                 warn!("Failed to parse settings: {}", e);
-                // Fall back to default settings if parsing fails
-                let default_settings = get_default_settings();
-                store.set("settings", serde_json::to_value(&default_settings).unwrap());
-                default_settings
+                (get_default_settings(), false)
             }
         }
     } else {
-        let default_settings = get_default_settings();
-        store.set("settings", serde_json::to_value(&default_settings).unwrap());
-        default_settings
+        (get_default_settings(), false)
     };
 
-    if ensure_post_process_defaults(&mut settings) {
-        store.set("settings", serde_json::to_value(&settings).unwrap());
+    let migrated = migrate_settings(&mut settings);
+    if migrated || !was_versioned {
+        store.set("settings", encode_settings(&settings));
     }
-
     settings
 }
 
@@ -769,20 +1020,18 @@ pub fn get_settings(app: &AppHandle) -> AppSettings {
         .store(SETTINGS_STORE_PATH)
         .expect("Failed to initialize store");
 
-    let mut settings = if let Some(settings_value) = store.get("settings") {
-        serde_json::from_value::<AppSettings>(settings_value).unwrap_or_else(|_| {
-            let default_settings = get_default_settings();
-            store.set("settings", serde_json::to_value(&default_settings).unwrap());
-            default_settings
-        })
+    let (mut settings, was_versioned) = if let Some(settings_value) = store.get("settings") {
+        match decode_settings(settings_value) {
+            Ok((settings, was_versioned)) => (settings, was_versioned),
+            Err(_) => (get_default_settings(), false),
+        }
     } else {
-        let default_settings = get_default_settings();
-        store.set("settings", serde_json::to_value(&default_settings).unwrap());
-        default_settings
+        (get_default_settings(), false)
     };
 
-    if ensure_post_process_defaults(&mut settings) {
-        store.set("settings", serde_json::to_value(&settings).unwrap());
+    let migrated = migrate_settings(&mut settings);
+    if migrated || !was_versioned {
+        store.set("settings", encode_settings(&settings));
     }
 
     settings
@@ -793,7 +1042,7 @@ pub fn write_settings(app: &AppHandle, settings: AppSettings) {
         .store(SETTINGS_STORE_PATH)
         .expect("Failed to initialize store");
 
-    store.set("settings", serde_json::to_value(&settings).unwrap());
+    store.set("settings", encode_settings(&settings));
 }
 
 pub fn get_bindings(app: &AppHandle) -> HashMap<String, ShortcutBinding> {
@@ -829,5 +1078,23 @@ mod tests {
         let settings = get_default_settings();
         assert!(!settings.auto_submit);
         assert_eq!(settings.auto_submit_key, AutoSubmitKey::Enter);
+    }
+
+    #[test]
+    fn decode_legacy_settings_payload() {
+        let settings = get_default_settings();
+        let value = serde_json::to_value(&settings).expect("serialize legacy settings");
+        let (decoded, was_versioned) = decode_settings(value).expect("decode settings");
+        assert!(!was_versioned);
+        assert_eq!(decoded.selected_model, settings.selected_model);
+    }
+
+    #[test]
+    fn decode_versioned_settings_payload() {
+        let settings = get_default_settings();
+        let value = encode_settings(&settings);
+        let (decoded, was_versioned) = decode_settings(value).expect("decode settings");
+        assert!(was_versioned);
+        assert_eq!(decoded.bindings.len(), settings.bindings.len());
     }
 }

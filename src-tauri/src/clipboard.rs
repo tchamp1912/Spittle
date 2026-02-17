@@ -3,7 +3,7 @@ use crate::input::{self, EnigoState};
 use crate::settings::TypingTool;
 use crate::settings::{get_settings, AutoSubmitKey, ClipboardHandling, PasteMethod};
 use enigo::{Direction, Enigo, Key, Keyboard};
-use log::info;
+use log::{debug, info};
 use std::time::Duration;
 use tauri::{AppHandle, Manager};
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -625,6 +625,166 @@ pub fn paste(text: String, app_handle: AppHandle) -> Result<(), String> {
         clipboard
             .write_text(&text)
             .map_err(|e| format!("Failed to copy to clipboard: {}", e))?;
+    }
+
+    Ok(())
+}
+
+/// Pastes text without appending a trailing space and without auto-submit.
+/// Used to immediately show raw transcription text before post-processing completes.
+pub fn paste_raw(text: String, app_handle: AppHandle) -> Result<(), String> {
+    let settings = get_settings(&app_handle);
+    let paste_method = settings.paste_method;
+    let paste_delay_ms = settings.paste_delay_ms;
+
+    info!(
+        "paste_raw: method={:?}, delay={}ms, len={}",
+        paste_method,
+        paste_delay_ms,
+        text.len()
+    );
+
+    let enigo_state = app_handle
+        .try_state::<EnigoState>()
+        .ok_or("Enigo state not initialized")?;
+    let mut enigo = enigo_state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock Enigo: {}", e))?;
+
+    match paste_method {
+        PasteMethod::None => {
+            info!("PasteMethod::None selected - skipping paste_raw");
+        }
+        PasteMethod::Direct => {
+            paste_direct(
+                &mut enigo,
+                &text,
+                #[cfg(target_os = "linux")]
+                settings.typing_tool,
+            )?;
+        }
+        PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
+            paste_via_clipboard(
+                &mut enigo,
+                &text,
+                &app_handle,
+                &paste_method,
+                paste_delay_ms,
+            )?;
+        }
+    }
+
+    // No trailing space, no auto-submit, no clipboard handling — intentionally omitted
+
+    Ok(())
+}
+
+/// Apply a minimal text diff to the already-pasted text:
+/// 1. Move cursor left from the end to skip unchanged suffix
+/// 2. Backspace-delete the changed region at that boundary
+/// 3. Insert replacement text
+/// 4. Move right over unchanged suffix to restore cursor-at-end
+///
+/// This produces a much less jarring visual experience than deleting everything.
+pub fn apply_text_diff(
+    suffix_chars: usize,
+    delete_chars: usize,
+    insert_text: &str,
+    app_handle: AppHandle,
+) -> Result<(), String> {
+    let settings = get_settings(&app_handle);
+    if settings.paste_method == PasteMethod::None {
+        info!("apply_text_diff: PasteMethod::None, skipping");
+        return Ok(());
+    }
+
+    debug!(
+        "apply_text_diff: suffix={}, delete={}, insert={} chars",
+        suffix_chars,
+        delete_chars,
+        insert_text.len(),
+    );
+
+    let enigo_state = app_handle
+        .try_state::<EnigoState>()
+        .ok_or("Enigo state not initialized")?;
+    let mut enigo = enigo_state
+        .0
+        .lock()
+        .map_err(|e| format!("Failed to lock Enigo: {}", e))?;
+
+    let mut used_ax_selection = false;
+    #[cfg(target_os = "macos")]
+    {
+        match crate::macos_ax::try_select_replace_range_before_cursor(delete_chars, suffix_chars) {
+            Ok(()) => {
+                used_ax_selection = true;
+            }
+            Err(e) => {
+                info!(
+                    "AX range selection unavailable, falling back to key-based diff apply: {}",
+                    e
+                );
+            }
+        }
+    }
+
+    if !used_ax_selection {
+        // Step 1: Move cursor left past the unchanged suffix to reach the end of the changed region
+        if suffix_chars > 0 {
+            input::send_left_arrow(&mut enigo, suffix_chars)?;
+            std::thread::sleep(Duration::from_millis(30));
+        }
+
+        // Step 2: Delete changed region with bounded backspaces at this boundary.
+        if delete_chars > 0 {
+            for _ in 0..delete_chars {
+                enigo
+                    .key(Key::Backspace, enigo::Direction::Click)
+                    .map_err(|e| format!("Failed to send Backspace: {}", e))?;
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    }
+
+    // Step 3: Type the replacement text at cursor.
+    if !insert_text.is_empty() {
+        let paste_method = settings.paste_method;
+        let paste_delay_ms = settings.paste_delay_ms;
+
+        match paste_method {
+            PasteMethod::None => {}
+            PasteMethod::Direct => {
+                paste_direct(
+                    &mut enigo,
+                    insert_text,
+                    #[cfg(target_os = "linux")]
+                    settings.typing_tool,
+                )?;
+            }
+            PasteMethod::CtrlV | PasteMethod::CtrlShiftV | PasteMethod::ShiftInsert => {
+                paste_via_clipboard(
+                    &mut enigo,
+                    insert_text,
+                    &app_handle,
+                    &paste_method,
+                    paste_delay_ms,
+                )?;
+            }
+        }
+        std::thread::sleep(Duration::from_millis(30));
+    } else if delete_chars > 0 && used_ax_selection {
+        // AX path selected the range; clear it when replacement is empty.
+        enigo
+            .key(Key::Backspace, enigo::Direction::Click)
+            .map_err(|e| format!("Failed to send Backspace: {}", e))?;
+        std::thread::sleep(Duration::from_millis(30));
+    }
+
+    // Step 4: Move cursor back to end (past the unchanged suffix)
+    if suffix_chars > 0 {
+        input::send_right_arrow(&mut enigo, suffix_chars)?;
     }
 
     Ok(())

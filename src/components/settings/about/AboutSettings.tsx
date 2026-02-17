@@ -29,9 +29,10 @@ export const AboutSettings: React.FC = () => {
 
   const handleDonateClick = async () => {
     try {
-      await openUrl("https://handy.computer/donate");
+      // Support the original Spittle project
+      await openUrl("https://github.com/cjpais/Spittle");
     } catch (error) {
-      console.error("Failed to open donate link:", error);
+      console.error("Failed to open link:", error);
     }
   };
 
@@ -66,7 +67,7 @@ export const AboutSettings: React.FC = () => {
           <Button
             variant="secondary"
             size="md"
-            onClick={() => openUrl("https://github.com/cjpais/Handy")}
+            onClick={() => openUrl("https://github.com/tchamp1912/Spittle")}
           >
             {t("settings.about.sourceCode.button")}
           </Button>

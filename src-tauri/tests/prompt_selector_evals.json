@@ -1,0 +1,51 @@
+{
+  "description": "Prompt selector evals with broad + adversarial routing coverage",
+  "min_pass_rate": 0.84,
+  "settings": {
+    "min_score": 0.08,
+    "timeout_ms": 50,
+    "hysteresis": 0.06
+  },
+  "cases": [
+    { "id": "action_items_explicit_tasks", "input": "Next steps: Sarah owns the API migration by Friday and Tom will update docs by Tuesday.", "expect_prompt": "default_action_items" },
+    { "id": "action_items_deadlines", "input": "Action items are to finalize design, assign owners, and commit by end of week.", "expect_prompt": "default_action_items" },
+    { "id": "action_items_owner_eta", "input": "Please list owner, due date, and deliverable for each task from this discussion.", "expect_prompt": "default_action_items" },
+    { "id": "action_items_followups", "input": "Capture follow-ups and responsibilities from this call.", "expect_prompt": "default_action_items" },
+    { "id": "action_items_checklist", "input": "Convert this into a checklist with assignees and deadlines.", "expect_prompt": "default_action_items" },
+
+    { "id": "meeting_notes_decisions", "input": "In today's meeting we reviewed agenda items, made two decisions, and listed open questions.", "expect_prompt": "default_meeting_notes" },
+    { "id": "meeting_notes_recap", "input": "Please create a meeting recap with attendees, decisions, and unresolved issues.", "expect_prompt": "default_meeting_notes" },
+    { "id": "meeting_notes_summary", "input": "Summarize this meeting with key points and outcomes.", "expect_prompt": "default_meeting_notes" },
+    { "id": "meeting_notes_minutes", "input": "Write clear meeting minutes from this transcript.", "expect_prompt": "default_meeting_notes" },
+    { "id": "meeting_notes_risks", "input": "Meeting summary should include decisions, risks, and follow-up topics.", "expect_prompt": "default_meeting_notes" },
+
+    { "id": "slack_update_team", "input": "Can you draft a quick slack update for the team channel about today's progress and blocker?", "expect_prompt": "default_slack_message" },
+    { "id": "slack_short_message", "input": "I need a concise message for our channel with status, owner, and ETA.", "expect_prompt": "default_slack_message" },
+    { "id": "slack_announcement", "input": "Write a short post for #eng-updates announcing the rollout.", "expect_prompt": "default_slack_message" },
+    { "id": "slack_blocker_ping", "input": "Compose a quick channel message asking for help with a blocker.", "expect_prompt": "default_slack_message" },
+    { "id": "slack_status_post", "input": "Draft a brief status update to share in Slack.", "expect_prompt": "default_slack_message" },
+
+    { "id": "document_writer_spec", "input": "Turn this into a design doc draft with context, details, and next steps.", "expect_prompt": "default_document_writer" },
+    { "id": "document_writer_proposal", "input": "Please write a proposal draft and structure it into sections.", "expect_prompt": "default_document_writer" },
+    { "id": "document_writer_prd", "input": "Create a product requirements document with scope and constraints.", "expect_prompt": "default_document_writer" },
+    { "id": "document_writer_memo", "input": "Convert this into a polished memo for leadership.", "expect_prompt": "default_document_writer" },
+    { "id": "document_writer_formal", "input": "Write a formal document version with headings and coherent flow.", "expect_prompt": "default_document_writer" },
+
+    { "id": "standup_format", "input": "Daily standup update: yesterday I fixed auth, today I will ship API tests, blockers none.", "expect_prompt": "default_standup_update" },
+    { "id": "standup_yesterday_today_blockers", "input": "Format this as yesterday today blockers for standup.", "expect_prompt": "default_standup_update" },
+    { "id": "standup_daily_sync", "input": "Please rewrite as a daily standup update.", "expect_prompt": "default_standup_update" },
+    { "id": "standup_three_parts", "input": "I need this in three sections: yesterday, today, blockers.", "expect_prompt": "default_standup_update" },
+    { "id": "standup_scrum_wording", "input": "Create a concise scrum standup update from this text.", "expect_prompt": "default_standup_update" },
+
+    { "id": "edge_action_items_vs_meeting_notes", "input": "Meeting recap with decisions and next steps with owners.", "expect_prompt": "default_action_items", "track_only": true, "notes": "Deliberate collision between meeting and action terms." },
+    { "id": "edge_standup_vs_slack", "input": "Post my yesterday/today/blockers update to the team channel.", "expect_prompt": "default_standup_update", "track_only": true, "notes": "Could route to standup or slack." },
+    { "id": "edge_document_vs_meeting", "input": "Turn these meeting notes into a formal design document.", "expect_prompt": "default_document_writer", "track_only": true },
+    { "id": "edge_slack_vs_action_items", "input": "Write a Slack message listing action items and owners.", "expect_prompt": "default_slack_message", "track_only": true },
+    { "id": "edge_keyword_noise", "input": "action action action meeting notes standup doc slack", "expect_prompt": "default_action_items", "track_only": true, "notes": "Keyword soup stress test." },
+    { "id": "edge_short_standup", "input": "ytb", "expect_prompt": "default_standup_update", "track_only": true, "notes": "Abbreviation likely unsupported; probes weakness." },
+    { "id": "edge_short_slack", "input": "for slack", "expect_prompt": "default_slack_message", "track_only": true },
+    { "id": "edge_short_doc", "input": "make this formal", "expect_prompt": "default_document_writer", "track_only": true },
+    { "id": "edge_ambiguous_rewrite", "input": "Please rewrite this cleanly.", "expect_prompt": "default_document_writer", "track_only": true, "notes": "Likely falls back instead of confident route." },
+    { "id": "edge_command_like", "input": "/standup update for today and blockers", "expect_prompt": "default_standup_update", "track_only": true }
+  ]
+}

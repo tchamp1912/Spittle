@@ -1,14 +1,16 @@
 use crate::audio_toolkit::{apply_custom_words, filter_transcription_output};
+use crate::domain::events::{ModelStateEvent, ModelStateKind};
+use crate::managers::domain_selector::{DomainContext, DomainSelectorManager};
 use crate::managers::model::{EngineType, ModelManager};
-use crate::settings::{get_settings, ModelUnloadTimeout};
+use crate::settings::{get_settings, AppSettings, ModelUnloadTimeout};
 use anyhow::Result;
 use log::{debug, error, info, warn};
-use serde::Serialize;
+use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::time::{Duration, SystemTime};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use transcribe_rs::{
     engines::{
         moonshine::{ModelVariant, MoonshineEngine, MoonshineModelParams},
@@ -23,14 +25,6 @@ use transcribe_rs::{
     },
     TranscriptionEngine,
 };
-
-#[derive(Clone, Debug, Serialize)]
-pub struct ModelStateEvent {
-    pub event_type: String,
-    pub model_id: Option<String>,
-    pub model_name: Option<String>,
-    pub error: Option<String>,
-}
 
 enum LoadedEngine {
     Whisper(WhisperEngine),
@@ -53,6 +47,45 @@ pub struct TranscriptionManager {
 }
 
 impl TranscriptionManager {
+    fn build_profiles_map(settings: &AppSettings) -> HashMap<String, crate::jargon::JargonProfile> {
+        let mut profiles = crate::jargon::builtin_profiles();
+        for pack in &settings.jargon_packs {
+            profiles.insert(
+                pack.id.clone(),
+                crate::jargon::JargonProfile {
+                    label: pack.label.clone(),
+                    terms: pack.terms.clone(),
+                    corrections: pack.corrections.clone(),
+                },
+            );
+        }
+        profiles
+    }
+
+    fn effective_profile_ids(&self, settings: &AppSettings, context_text: &str) -> Vec<String> {
+        let mut profile_ids = settings.jargon_enabled_profiles.clone();
+        if let Some(selector) = self.app_handle.try_state::<Arc<DomainSelectorManager>>() {
+            let auto_profiles = selector.select_profiles_with_timeout(
+                settings,
+                &DomainContext {
+                    text: context_text.to_string(),
+                },
+            );
+            if let Some(auto_profiles) = auto_profiles {
+                if settings.domain_selector_blend_manual_profiles {
+                    for profile in auto_profiles {
+                        if !profile_ids.iter().any(|id| id == &profile) {
+                            profile_ids.push(profile);
+                        }
+                    }
+                } else {
+                    profile_ids = auto_profiles;
+                }
+            }
+        }
+        profile_ids
+    }
+
     pub fn new(app_handle: &AppHandle, model_manager: Arc<ModelManager>) -> Result<Self> {
         let manager = Self {
             engine: Arc::new(Mutex::new(None)),
@@ -109,12 +142,12 @@ impl TranscriptionManager {
                                 if let Ok(()) = manager_cloned.unload_model() {
                                     let _ = app_handle_cloned.emit(
                                         "model-state-changed",
-                                        ModelStateEvent {
-                                            event_type: "unloaded".to_string(),
-                                            model_id: None,
-                                            model_name: None,
-                                            error: None,
-                                        },
+                                        ModelStateEvent::new(
+                                            ModelStateKind::Unloaded,
+                                            None,
+                                            None,
+                                            None,
+                                        ),
                                     );
                                     let unload_duration = unload_start.elapsed();
                                     debug!(
@@ -163,12 +196,7 @@ impl TranscriptionManager {
         // Emit unloaded event
         let _ = self.app_handle.emit(
             "model-state-changed",
-            ModelStateEvent {
-                event_type: "unloaded".to_string(),
-                model_id: None,
-                model_name: None,
-                error: None,
-            },
+            ModelStateEvent::new(ModelStateKind::Unloaded, None, None, None),
         );
 
         let unload_duration = unload_start.elapsed();
@@ -199,12 +227,12 @@ impl TranscriptionManager {
         // Emit loading started event
         let _ = self.app_handle.emit(
             "model-state-changed",
-            ModelStateEvent {
-                event_type: "loading_started".to_string(),
-                model_id: Some(model_id.to_string()),
-                model_name: None,
-                error: None,
-            },
+            ModelStateEvent::new(
+                ModelStateKind::LoadingStarted,
+                Some(model_id.to_string()),
+                None,
+                None,
+            ),
         );
 
         let model_info = self
@@ -216,12 +244,12 @@ impl TranscriptionManager {
             let error_msg = "Model not downloaded";
             let _ = self.app_handle.emit(
                 "model-state-changed",
-                ModelStateEvent {
-                    event_type: "loading_failed".to_string(),
-                    model_id: Some(model_id.to_string()),
-                    model_name: Some(model_info.name.clone()),
-                    error: Some(error_msg.to_string()),
-                },
+                ModelStateEvent::new(
+                    ModelStateKind::LoadingFailed,
+                    Some(model_id.to_string()),
+                    Some(model_info.name.clone()),
+                    Some(error_msg.to_string()),
+                ),
             );
             return Err(anyhow::anyhow!(error_msg));
         }
@@ -236,12 +264,12 @@ impl TranscriptionManager {
                     let error_msg = format!("Failed to load whisper model {}: {}", model_id, e);
                     let _ = self.app_handle.emit(
                         "model-state-changed",
-                        ModelStateEvent {
-                            event_type: "loading_failed".to_string(),
-                            model_id: Some(model_id.to_string()),
-                            model_name: Some(model_info.name.clone()),
-                            error: Some(error_msg.clone()),
-                        },
+                        ModelStateEvent::new(
+                            ModelStateKind::LoadingFailed,
+                            Some(model_id.to_string()),
+                            Some(model_info.name.clone()),
+                            Some(error_msg.clone()),
+                        ),
                     );
                     anyhow::anyhow!(error_msg)
                 })?;
@@ -256,12 +284,12 @@ impl TranscriptionManager {
                             format!("Failed to load parakeet model {}: {}", model_id, e);
                         let _ = self.app_handle.emit(
                             "model-state-changed",
-                            ModelStateEvent {
-                                event_type: "loading_failed".to_string(),
-                                model_id: Some(model_id.to_string()),
-                                model_name: Some(model_info.name.clone()),
-                                error: Some(error_msg.clone()),
-                            },
+                            ModelStateEvent::new(
+                                ModelStateKind::LoadingFailed,
+                                Some(model_id.to_string()),
+                                Some(model_info.name.clone()),
+                                Some(error_msg.clone()),
+                            ),
                         );
                         anyhow::anyhow!(error_msg)
                     })?;
@@ -279,12 +307,12 @@ impl TranscriptionManager {
                             format!("Failed to load moonshine model {}: {}", model_id, e);
                         let _ = self.app_handle.emit(
                             "model-state-changed",
-                            ModelStateEvent {
-                                event_type: "loading_failed".to_string(),
-                                model_id: Some(model_id.to_string()),
-                                model_name: Some(model_info.name.clone()),
-                                error: Some(error_msg.clone()),
-                            },
+                            ModelStateEvent::new(
+                                ModelStateKind::LoadingFailed,
+                                Some(model_id.to_string()),
+                                Some(model_info.name.clone()),
+                                Some(error_msg.clone()),
+                            ),
                         );
                         anyhow::anyhow!(error_msg)
                     })?;
@@ -299,12 +327,12 @@ impl TranscriptionManager {
                             format!("Failed to load SenseVoice model {}: {}", model_id, e);
                         let _ = self.app_handle.emit(
                             "model-state-changed",
-                            ModelStateEvent {
-                                event_type: "loading_failed".to_string(),
-                                model_id: Some(model_id.to_string()),
-                                model_name: Some(model_info.name.clone()),
-                                error: Some(error_msg.clone()),
-                            },
+                            ModelStateEvent::new(
+                                ModelStateKind::LoadingFailed,
+                                Some(model_id.to_string()),
+                                Some(model_info.name.clone()),
+                                Some(error_msg.clone()),
+                            ),
                         );
                         anyhow::anyhow!(error_msg)
                     })?;
@@ -325,12 +353,12 @@ impl TranscriptionManager {
         // Emit loading completed event
         let _ = self.app_handle.emit(
             "model-state-changed",
-            ModelStateEvent {
-                event_type: "loading_completed".to_string(),
-                model_id: Some(model_id.to_string()),
-                model_name: Some(model_info.name.clone()),
-                error: None,
-            },
+            ModelStateEvent::new(
+                ModelStateKind::Loaded,
+                Some(model_id.to_string()),
+                Some(model_info.name.clone()),
+                None,
+            ),
         );
 
         let load_duration = load_start.elapsed();
@@ -430,9 +458,43 @@ impl TranscriptionManager {
                         Some(normalized)
                     };
 
+                    // Build jargon initial_prompt if jargon has active terms
+                    let initial_prompt = if !settings.jargon_enabled_profiles.is_empty()
+                        || !settings.jargon_custom_terms.is_empty()
+                        || !settings.jargon_packs.is_empty()
+                    {
+                        let profiles = Self::build_profiles_map(&settings);
+                        let effective_profiles = self.effective_profile_ids(&settings, "");
+                        let jargon_settings = crate::jargon::JargonSettings {
+                            enabled_profiles: effective_profiles,
+                            custom_terms: settings.jargon_custom_terms.clone(),
+                            custom_corrections: settings.jargon_custom_corrections.clone(),
+                        };
+                        let dict =
+                            crate::jargon::compute_active_dictionary(&jargon_settings, &profiles);
+                        if !dict.terms.is_empty() {
+                            let prompt = crate::jargon::build_initial_prompt(&dict);
+                            if !prompt.is_empty() {
+                                debug!(
+                                    "Jargon initial_prompt ({} chars): {}",
+                                    prompt.len(),
+                                    &prompt[..prompt.len().min(100)]
+                                );
+                                Some(prompt)
+                            } else {
+                                None
+                            }
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    };
+
                     let params = WhisperInferenceParams {
                         language: whisper_language,
                         translate: settings.translate_to_english,
+                        initial_prompt,
                         ..Default::default()
                     };
 
@@ -485,6 +547,37 @@ impl TranscriptionManager {
 
         // Filter out filler words and hallucinations
         let filtered_result = filter_transcription_output(&corrected_result);
+
+        // Apply jargon corrections
+        let filtered_result = if !settings.jargon_enabled_profiles.is_empty()
+            || !settings.jargon_custom_corrections.is_empty()
+            || !settings.jargon_packs.is_empty()
+        {
+            let profiles = Self::build_profiles_map(&settings);
+            let effective_profiles = self.effective_profile_ids(&settings, &filtered_result);
+            let jargon_settings = crate::jargon::JargonSettings {
+                enabled_profiles: effective_profiles,
+                custom_terms: settings.jargon_custom_terms.clone(),
+                custom_corrections: settings.jargon_custom_corrections.clone(),
+            };
+            let dict = crate::jargon::compute_active_dictionary(&jargon_settings, &profiles);
+            if !dict.corrections.is_empty() {
+                let corrected =
+                    crate::jargon::apply_corrections(&filtered_result, &dict.corrections);
+                if corrected != filtered_result {
+                    debug!(
+                        "Jargon corrections applied: {} -> {} chars",
+                        filtered_result.len(),
+                        corrected.len()
+                    );
+                }
+                corrected
+            } else {
+                filtered_result
+            }
+        } else {
+            filtered_result
+        };
 
         let et = std::time::Instant::now();
         let translation_note = if settings.translate_to_english {

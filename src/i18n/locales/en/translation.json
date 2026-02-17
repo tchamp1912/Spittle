@@ -14,6 +14,8 @@
     "postProcessing": "Post Process",
     "history": "History",
     "debug": "Debug",
+    "jargon": "Jargon",
+    "jargonPacks": "Jargon Packs",
     "about": "About"
   },
   "onboarding": {
@@ -63,7 +65,7 @@
     },
     "permissions": {
       "title": "Permissions Required",
-      "description": "Handy needs a couple of permissions to work properly.",
+      "description": "Spittle needs a couple of permissions to work properly.",
       "microphone": {
         "title": "Microphone Access",
         "description": "Required to hear your voice for transcription."
@@ -119,7 +121,7 @@
     "general": {
       "title": "General",
       "shortcut": {
-        "title": "Handy Shortcuts",
+        "title": "Spittle Shortcuts",
         "description": "Configure keyboard shortcuts to trigger speech-to-text recording",
         "loading": "Loading shortcuts...",
         "none": "No shortcuts configured",
@@ -156,6 +158,10 @@
       "pushToTalk": {
         "label": "Push To Talk",
         "description": "Hold to record, release to stop"
+      },
+      "segmentOnSilence": {
+        "label": "Audio Segment Size",
+        "description": "Split live transcription updates into fixed audio chunks. Set to 0s to disable chunked updates."
       }
     },
     "models": {
@@ -218,11 +224,11 @@
       },
       "autostart": {
         "label": "Launch on Startup",
-        "description": "Automatically start Handy when you log in to your computer."
+        "description": "Automatically start Spittle when you log in to your computer."
       },
       "showTrayIcon": {
         "label": "Show Tray Icon",
-        "description": "Display the Handy icon in the system tray."
+        "description": "Display the Spittle icon in the system tray."
       },
       "overlay": {
         "title": "Overlay Position",
@@ -295,7 +301,89 @@
         "placeholder": "Add a word",
         "add": "Add",
         "remove": "Remove {{word}}"
+      },
+      "atFileExpansion": {
+        "label": "@File Expansion",
+        "description": "Resolve @filename tokens in transcriptions against your active workspace and append file snippets. English + Git repositories only (macOS)."
       }
+    },
+    "jargon": {
+      "title": "Jargon & Profiles",
+      "description": "Improve transcription accuracy for technical terms by enabling jargon profiles and adding custom corrections.",
+      "selector": {
+        "title": "Domain Selector Sidecar",
+        "description": "Runs a fail-open sidecar that can auto-select relevant jargon profiles. If it fails or times out, manual profiles are used.",
+        "simpleDescription": "Auto-selects relevant jargon profiles. If it fails or times out, Spittle falls back to your manual profile selection.",
+        "blendManualOn": "Use with manual profiles: On",
+        "blendManualOff": "Use with manual profiles: Off",
+        "modeLabel": "Selection mode",
+        "modes": {
+          "conservative": "Conservative",
+          "balanced": "Balanced",
+          "aggressive": "Aggressive"
+        },
+        "customModeHint": "Custom tuning active (advanced values differ from presets).",
+        "advancedTitle": "Advanced tuning (debug mode)",
+        "blendManual": "Blend with manual profiles",
+        "timeoutPlaceholder": "Timeout (ms)",
+        "topKPlaceholder": "Top-K profiles",
+        "minScorePlaceholder": "Min score (0-1)",
+        "hysteresisPlaceholder": "Hysteresis (0-1)"
+      },
+      "profiles": {
+        "title": "Profiles",
+        "description": "Enable built-in jargon profiles for common technical domains."
+      },
+      "customTerms": {
+        "title": "Custom Terms",
+        "description": "Add technical terms to help the speech recognition engine. These terms bias the model toward recognizing them correctly.",
+        "placeholder": "Add a term",
+        "add": "Add"
+      },
+      "customCorrections": {
+        "title": "Custom Corrections",
+        "description": "Add find-and-replace rules for words the speech engine consistently gets wrong.",
+        "from": "From (misheard)",
+        "to": "To (correct)",
+        "fromPlaceholder": "e.g. cloud flare",
+        "toPlaceholder": "e.g. Cloudflare",
+        "add": "Add Correction",
+        "remove": "Remove correction"
+      },
+      "summary": {
+        "title": "Active Summary",
+        "terms": "{{count}} terms",
+        "corrections": "{{count}} corrections"
+      }
+    },
+    "jargonPacks": {
+      "title": "Jargon Packs",
+      "actions": {
+        "title": "Import / Export",
+        "description": "Import, export, and manage reusable jargon packs.",
+        "import": "Import JSON",
+        "export": "Export JSON"
+      },
+      "create": {
+        "title": "Create New Pack",
+        "description": "Create a reusable jargon list with terms and spoken correction rules.",
+        "idPlaceholder": "Pack ID (e.g. devops_team)",
+        "labelPlaceholder": "Pack label",
+        "termsPlaceholder": "Terms (comma or newline separated)",
+        "correctionsPlaceholder": "Corrections, one per line: spoken phrase => CanonicalTerm",
+        "add": "Add Pack"
+      },
+      "list": {
+        "title": "Existing Packs",
+        "empty": "No custom jargon packs yet.",
+        "summary": "{{terms}} terms | {{corrections}} corrections"
+      },
+      "summary": {
+        "title": "Pack Summary",
+        "text": "{{packs}} packs | {{terms}} terms | {{corrections}} corrections"
+      },
+      "importDialogTitle": "Import jargon packs JSON",
+      "exportDialogTitle": "Export jargon packs JSON"
     },
     "postProcessing": {
       "title": "Post Process",
@@ -349,6 +437,8 @@
         "promptInstructions": "Prompt Instructions",
         "promptInstructionsPlaceholder": "Write the instructions to run after transcription. Example: Improve grammar and clarity for the following text: ${output}",
         "promptTip": "Tip: Use <code>${output}</code> to insert the transcribed text in your prompt.",
+        "autoSelectOn": "Auto-select prompt: On",
+        "autoSelectOff": "Auto-select prompt: Off",
         "updatePrompt": "Update Prompt",
         "deletePrompt": "Delete Prompt",
         "createPrompt": "Create Prompt",
@@ -380,7 +470,7 @@
       },
       "updateChecks": {
         "label": "Check for Updates",
-        "description": "Automatically check for new versions of Handy"
+        "description": "Automatically check for new versions of Spittle"
       },
       "soundTheme": {
         "label": "Sound Theme",
@@ -444,11 +534,11 @@
       "title": "About",
       "version": {
         "title": "Version",
-        "description": "Current version of Handy"
+        "description": "Current version of Spittle"
       },
       "appDataDirectory": {
         "title": "App Data Directory",
-        "description": "Location where Handy stores its data"
+        "description": "Location where Spittle stores its data"
       },
       "sourceCode": {
         "title": "Source Code",
@@ -457,7 +547,7 @@
       },
       "supportDevelopment": {
         "title": "Support Development",
-        "description": "Help us continue building Handy",
+        "description": "Help us continue building Spittle",
         "button": "Donate"
       },
       "acknowledgments": {
@@ -465,7 +555,7 @@
         "whisper": {
           "title": "Whisper.cpp",
           "description": "High-performance inference of OpenAI's Whisper automatic speech recognition model",
-          "details": "Handy uses Whisper.cpp for fast, local speech-to-text processing. Thanks to the amazing work by Georgi Gerganov and contributors."
+          "details": "Spittle uses Whisper.cpp for fast, local speech-to-text processing. Thanks to the amazing work by Georgi Gerganov and contributors."
         }
       }
     }
@@ -508,7 +598,7 @@
   },
   "accessibility": {
     "permissionsRequired": "Accessibility Permissions Required",
-    "permissionsDescription": "Handy needs accessibility permissions to type transcribed text.",
+    "permissionsDescription": "Spittle needs accessibility permissions to type transcribed text.",
     "openSettings": "Open System Settings",
     "dismiss": "Dismiss"
   },
@@ -517,7 +607,7 @@
   },
   "appLanguage": {
     "title": "Application Language",
-    "description": "Change the language of the Handy interface"
+    "description": "Change the language of the Spittle interface"
   },
   "overlay": {
     "transcribing": "Transcribing...",

@@ -1,0 +1,9 @@
+{
+  "name": "c-prefix-drift",
+  "hypotheses": [
+    "Can we make",
+    "Can we make the rewrites into a single cue",
+    "Can we make the rewrites into a single cue such that if any old rewrites are queued up",
+    "Can we make the rewrites into a single cue such that if any old rewrites are queued up, that a new one will evict that so that it's not still valid."
+  ]
+}

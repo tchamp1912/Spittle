@@ -9,5 +9,5 @@ fn main() {
         std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1");
     }
 
-    handy_app_lib::run()
+    spittle_app_lib::run()
 }

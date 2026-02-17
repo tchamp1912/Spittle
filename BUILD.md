@@ -1,6 +1,6 @@
 # Build Instructions
 
-This guide covers how to set up the development environment and build Handy from source across different platforms.
+This guide covers how to set up the development environment and build Spittle from source across different platforms.
 
 ## Prerequisites
 
@@ -52,8 +52,8 @@ This guide covers how to set up the development environment and build Handy from
 ### 1. Clone the Repository
 
 ```bash
-git clone git@github.com:cjpais/Handy.git
-cd Handy
+git clone git@github.com:cjpais/Spittle.git
+cd Spittle
 ```
 
 ### 2. Install Dependencies
